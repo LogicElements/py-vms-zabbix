@@ -1,36 +1,36 @@
 # vms-zabbix-agent
 
-Zabbix monitoring agent for Logic Elements VMS deployments.
+Zabbix agent pro monitorování instalací VMS od Logic Elements.
 
-It watches a MySQL database (`BVMS`) that VMS server software writes into, and forwards derived health metrics (measured speed, buffer/config/timestamp ages, buffer row counts) to a Zabbix server as trapper items (`vms.speed`, `vms.buf_rows_1`, ...).
+Sleduje MySQL databázi (`BVMS`), do které zapisuje serverový software VMS, a odvozené metriky o stavu systému (měřené otáčky, stáří bufferů, konfigurace a časových značek, počty řádků v bufferech) odesílá na Zabbix server jako trapper položky (`vms.speed`, `vms.buf_rows_1`, ...).
 
-This package was split out of [`pyvms`](https://github.com/LogicElements/py-vms), which it depends on for reading back data from the `BVMS` database (`pyvms.DbMySql.DbMysql`).
+Balíček byl vyčleněn z projektu [`pyvms`](https://github.com/LogicElements/py-vms), na kterém závisí kvůli čtení dat z databáze `BVMS` (`pyvms.DbMySql.DbMysql`).
 
-## Installation
+## Instalace
 
 ```bash
 pip install -e .
 ```
 
-Runs on Windows only (uses `pywin32` for the Windows Service integration).
+Běží pouze na Windows (pro integraci s Windows Service se používá `pywin32`).
 
-## Usage
+## Použití
 
-Run in the foreground for testing:
+Spuštění na popředí pro testování:
 
 ```bash
 python -m zabagent.ZabAgent
 ```
 
-Install and run as a Windows Service (`ZabAgent`):
+Instalace a spuštění jako služba Windows (`ZabAgent`):
 
 ```bash
 python -m zabagent.ZabAgent install
 python -m zabagent.ZabAgent start
 ```
 
-Configuration (MySQL and Zabbix connection details, list of monitored generators) is stored as JSON at `src/zabagent/data/config_default.json` and loaded via `ZabConfig.Config`.
+Konfigurace (přístupové údaje k MySQL a Zabbixu, seznam monitorovaných generátorů) je uložena jako JSON v souboru `src/zabagent/data/config_default.json` a načítá se přes `ZabConfig.Config`.
 
-## License
+## Licence
 
-MIT © Logic Elements s.r.o. — see [LICENSE](LICENSE).
+MIT © Logic Elements s.r.o. — viz [LICENSE](LICENSE).
