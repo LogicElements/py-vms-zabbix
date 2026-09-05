@@ -8,9 +8,16 @@ import servicemanager
 from time import sleep
 from datetime import *
 
+# Allow running this file directly (python ZabAgent.py) as well as a package
+# module (python -m zabagent.ZabAgent). Direct execution provides no package
+# context, which the relative imports below require.
+if not __package__:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "zabagent"
+
 from pyvms.DbMySql import DbMysql
-from . import ZabConfig as Cfg
-from . import ZabSender as Snd
+from .ZabConfig import Config
+from .ZabSender import ZabSender, ZabItems
 
 
 class ZabAgent:
@@ -20,7 +27,7 @@ class ZabAgent:
     def __init__(self):
         self._running = False
         self.db = DbMysql()
-        self.cfg = Cfg.Config(tgs=1)
+        self.cfg = Config(tgs=1)
         self.cfg.store(self.CFG_DEFAULT)
         self.snd = None
 
@@ -30,14 +37,14 @@ class ZabAgent:
 
     def start(self):
         self._running = True
-        self.cfg = Cfg.Config.load(self.CFG_DEFAULT)
+        self.cfg = Config.load(self.CFG_DEFAULT)
         self.db.connect(
             host=self.cfg.mysql,
             database=self.cfg.database,
             user=self.cfg.user,
             password=self.cfg.password
         )
-        self.snd = Snd.ZabSender(self.cfg.zabbix, self.cfg.zabbix_port)
+        self.snd = ZabSender(self.cfg.zabbix, self.cfg.zabbix_port)
 
     def main(self):
         while self._running:
@@ -47,7 +54,7 @@ class ZabAgent:
 
                 inf = self.db.get_info(self.cfg.info, tg.system_id)
 
-                items = Snd.ZabItems()
+                items = ZabItems()
 
                 items.speed = round(1e8 / inf[4]*60, 4)
                 items.timestamp_age = int((now - inf[5]).total_seconds())
