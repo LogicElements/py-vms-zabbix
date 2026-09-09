@@ -12,6 +12,14 @@
 | UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Zbývá |
 | UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Zbývá |
 | UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá |
+| UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Zbývá |
+| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Zbývá |
+| UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Zbývá |
+| UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá |
+| UC2-R5 | Turbína popsaná názvem, system_id a jedním až dvěma buffery | Zbývá |
+| UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá |
+| UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Zbývá |
+| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá |
 
 ## Účel projektu
 
@@ -92,3 +100,73 @@ byla potřeba oprávnění administrátora.
 - Po přihlášení uživatele na server se tray aplikace spustí bez ručního zásahu a její ikona je v systray.
 - Automatické spuštění funguje i po restartu serveru.
 - Automatické spuštění se nastaví při instalaci agenta, ne ručním zásahem obsluhy.
+
+## UC2 – Nastavení agenta na konkrétní instalaci
+
+Aktérem je obsluha serveru VMS. Cílem je nastavit agenta na danou instalaci – kam odesílat
+metriky a které turbíny sledovat – bez zásahu do kódu. Spouštěčem je nasazení agenta na nový
+server nebo změna instalace, například jiná turbína nebo jiný Zabbix server. Obsluha nastaví
+hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
+
+### UC2-R1
+**Popis:** Konfigurace agenta je uložená v jednom souboru JSON, který vznikne serializací konfigurační třídy nástrojem jsonpickle.
+**DoD:**
+- Konfigurace je v kódu definovaná jako třída, jejíž členy odpovídají jednotlivým konfiguračním položkám.
+- Uložený soubor je platný JSON a nese typové značky jsonpicklu, takže se načte zpět jako instance konfigurační třídy.
+- Uložení a následné načtení konfigurace vrátí stejné hodnoty všech položek.
+
+### UC2-R2
+**Popis:** Konfigurace obsahuje ve společné skupině parametry odesílání do Zabbixu.
+**DoD:**
+- Skupina obsahuje adresu Zabbix serveru a číslo portu jeho trapperu.
+- Skupina obsahuje `location` – textové označení lokality, ze kterého se skládá název hostu v Zabbixu (viz UC2-R5).
+- Agent odesílá metriky na adresu a port uvedené v konfiguraci.
+- Změna kterékoli z těchto hodnot se projeví po restartu služby, bez úpravy kódu.
+
+### UC2-R3
+**Popis:** Konfigurace obsahuje seznam jedné až čtyř turbín, každou nastavenou samostatně.
+**DoD:**
+- Agent přijme konfiguraci s jednou až čtyřmi turbínami.
+- Konfiguraci s prázdným seznamem turbín nebo s více než čtyřmi turbínami agent odmítne jako neplatnou a nezačne odesílat metriky.
+- Hodnoty nastavené u jedné turbíny neovlivní hodnoty ostatních turbín.
+
+### UC2-R4
+**Popis:** Agent konfiguraci při svém běhu nepřepisuje.
+**DoD:**
+- Konfigurační soubor je po startu a zastavení služby bajtově shodný se stavem před startem.
+- Hodnoty nastavené obsluhou zůstanou v souboru zachované i po restartu serveru.
+
+### UC2-R5
+**Popis:** Každá turbína je v konfiguraci popsaná názvem, identifikátorem `system_id` a seznamem bufferů.
+**DoD:**
+- U každé turbíny se nastaví název, `system_id` a seznam názvů bufferů.
+- Seznam bufferů obsahuje jeden nebo dva buffery; konfiguraci s prázdným seznamem nebo s více než dvěma buffery agent odmítne jako neplatnou.
+- Turbína s jedním nastaveným bufferem je platná a agent u ní druhý buffer nevyžaduje.
+- Metriky turbíny se odesílají do Zabbixu pod názvem hostu ve tvaru `<location>_<název turbíny>`, tedy `location` a název turbíny spojené podtržítkem.
+- Název hostu je jednoznačný pro každou kombinaci lokality a turbíny, takže se metriky různých turbín ani různých lokalit nemíchají.
+- `system_id` určuje, které řádky se z databáze čtou pro danou turbínu.
+
+### UC2-R6
+**Popis:** Konfigurace obsahuje ve společné skupině parametry databáze MySQL.
+**DoD:**
+- Skupina obsahuje adresu serveru MySQL, název databáze, uživatelské jméno a heslo.
+- Skupina obsahuje název tabulky, ze které agent čte informace o turbínách (`info`).
+- Agent se k databázi připojuje a čte z tabulky uvedené v konfiguraci.
+- Změna kterékoli z těchto hodnot se projeví po restartu služby, bez úpravy kódu.
+- Heslo je v konfiguraci uložené v otevřené podobě, bez šifrování.
+
+### UC2-R7
+**Popis:** Agent pracuje s konfigurací umístěnou v `ProgramData`; konfigurace dodaná v balíčku je jen výchozí šablona.
+**DoD:**
+- Agent čte konfiguraci ze souboru `C:\ProgramData\LogicElements\ZabbixVms\config.json`.
+- Pokud tento soubor neexistuje, vytvoří se při prvním spuštění z výchozí konfigurace dodané v balíčku.
+- Pokud soubor existuje, agent ho použije a výchozí konfiguraci z balíčku ignoruje.
+- Instalace ani aktualizace balíčku obsah souboru v `ProgramData` nezmění.
+
+### UC2-R8
+**Popis:** Konfiguraci lze otevřít k editaci z kontextového menu ikony v systray.
+**DoD:**
+- Kontextové menu ikony obsahuje položku Open configuration.
+- Volbou této položky se aktivní konfigurační soubor z `ProgramData` otevře v textovém editoru, který má systém přiřazený k souborům `.json`.
+- Po uložení změn a restartu služby agent pracuje podle nových hodnot.
+- Editace konfigurace nevyžaduje oprávnění administrátora.
