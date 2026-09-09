@@ -20,6 +20,9 @@
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Zbývá |
 | UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá |
+| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá |
+| UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá |
+| UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Zbývá |
 
 ## Účel projektu
 
@@ -170,3 +173,49 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 - Volbou této položky se aktivní konfigurační soubor z `ProgramData` otevře v textovém editoru, který má systém přiřazený k souborům `.json`.
 - Po uložení změn a restartu služby agent pracuje podle nových hodnot.
 - Editace konfigurace nevyžaduje oprávnění administrátora.
+
+## UC3 – Sada metrik odesílaných do Zabbixu
+
+Aktérem je ten, kdo zavádí dohled v Zabbixu. Cílem je mít jednu závaznou sadu metrik, podle
+které se v Zabbixu založí položky a proti které se dá ověřit, že agent odesílá právě je.
+Spouštěčem je zavedení dohledu nad novou instalací nebo změna sady metrik. Sada je vedená jako
+tabulka; z jejích řádků se založí položky typu Zabbix trapper a agent odesílá právě tyto
+metriky. Jak agent k hodnotám metrik dochází, řeší samostatný use case.
+
+Sada metrik odesílaných do Zabbixu:
+
+| Klíč | Název | Typ hodnoty | Jednotka | Popis |
+| --- | --- | --- | --- | --- |
+| `vms.speed` | Otáčky turbíny | Numeric (float) | rpm | Aktuální otáčky turbíny |
+| `vms.info_age` | Stáří info záznamu | Numeric (unsigned) | s | |
+| `vms.timestamp_age` | Stáří časové značky | Numeric (unsigned) | s | |
+| `vms.config_age` | Stáří konfigurace | Numeric (unsigned) | s | |
+| `vms.buf_rows_1` | Počet řádků v bufferu 1 | Numeric (unsigned) | | Počet řádků v první bufferové tabulce |
+| `vms.buf_rows_2` | Počet řádků v bufferu 2 | Numeric (unsigned) | | Počet řádků v druhé bufferové tabulce |
+| `vms.buf_age_1` | Stáří bufferu 1 | Numeric (unsigned) | s | Doba od poslední změny první bufferové tabulky |
+| `vms.buf_age_2` | Stáří bufferu 2 | Numeric (unsigned) | s | Doba od poslední změny druhé bufferové tabulky |
+| `vms.buf_bulk_1` | Bulk bufferu 1 | Numeric (unsigned) | | |
+| `vms.buf_bulk_2` | Bulk bufferu 2 | Numeric (unsigned) | | |
+
+Popis u části metrik se doplní později; v Zabbixu je nepovinný.
+
+### UC3-R1
+**Popis:** Sada metrik, které agent odesílá do Zabbixu, je vedená jako tabulka v této PRS.
+**DoD:**
+- Tabulka uvádí každou metriku, kterou agent odesílá.
+- Agent neodesílá žádnou metriku, která v tabulce není.
+
+### UC3-R2
+**Popis:** Tabulka metrik obsahuje sloupce potřebné k založení odpovídající položky v Zabbixu.
+**DoD:**
+- Tabulka má sloupce Klíč, Název, Typ hodnoty, Jednotka a Popis.
+- Sloupec Typ hodnoty používá názvy typů podle Zabbixu.
+- Z jednoho řádku tabulky lze v Zabbixu založit položku bez doplňování dalších údajů.
+- Typ položky se v tabulce neuvádí, protože všechny metriky jsou položky typu Zabbix trapper.
+
+### UC3-R3
+**Popis:** Metriky vázané na buffer se odesílají pro každý buffer nastavený u dané turbíny.
+**DoD:**
+- U turbíny se dvěma nastavenými buffery se odesílají metriky obou bufferů.
+- U turbíny s jedním nastaveným bufferem se odesílají metriky pouze tohoto bufferu.
+- Klíč metriky rozlišuje, ke kterému z bufferů turbíny hodnota patří.
