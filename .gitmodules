@@ -1,0 +1,3 @@
+[submodule "agent-general"]
+	path = agent-general
+	url = git@github.com:LogicElements/agent-general.git
