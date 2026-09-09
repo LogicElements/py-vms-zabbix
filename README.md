@@ -6,6 +6,10 @@ Sleduje MySQL databázi (`BVMS`), do které zapisuje serverový software VMS, a 
 
 Balíček byl vyčleněn z projektu [`pyvms`](https://github.com/LogicElements/py-vms), na kterém závisí kvůli čtení dat z databáze `BVMS` (`pyvms.DbMySql.DbMysql`).
 
+## Dokumentace
+
+- [PRS-vms-zabbix-agent.md](doc/PRS-vms-zabbix-agent.md) – Product Requirement Specification: účel projektu, use cases a requirementy.
+
 ## Instalace
 
 ```bash
