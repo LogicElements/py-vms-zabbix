@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,15 +10,16 @@ authors = [
   { name="Jan Bartovský", email="jan.bartovsky@logicelements.cz" },
 ]
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
 ]
 keywords = ["logicelements", "vibration", "vms", "zabbix"]
 
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 dependencies = [
     "pyvms",
     "jsonpickle",

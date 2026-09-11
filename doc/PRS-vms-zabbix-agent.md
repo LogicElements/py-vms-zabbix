@@ -54,7 +54,7 @@ byla potřeba oprávnění administrátora.
 ### UC1-R1
 **Popis:** Agent je implementovaný v Pythonu a nasaditelný na Windows serveru, na kterém běží VMS.
 **DoD:**
-- Balíček se nainstaluje příkazem `pip install .` na Windows serveru s Pythonem 3.7 nebo novějším.
+- Balíček se nainstaluje příkazem `pip install .` na Windows serveru s Pythonem 3.12 nebo novějším.
 - Instalace nevyžaduje jiné běhové prostředí než Python a závislosti deklarované v `pyproject.toml`.
 - Jedna instalace přinese službu i tray aplikaci; každá má vlastní vstupní bod.
 - Vstupní bod tray aplikace se spustí bez konzolového okna.
