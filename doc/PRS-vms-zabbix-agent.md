@@ -194,17 +194,16 @@ Sada metrik odesílaných do Zabbixu:
 | Klíč | Název | Typ hodnoty | Jednotka | Popis |
 | --- | --- | --- | --- | --- |
 | `vms.speed` | Otáčky turbíny | Numeric (float) | rpm | Aktuální otáčky turbíny |
-| `vms.info_age` | Stáří info záznamu | Numeric (unsigned) | s | |
-| `vms.timestamp_age` | Stáří časové značky | Numeric (unsigned) | s | |
-| `vms.config_age` | Stáří konfigurace | Numeric (unsigned) | s | |
+| `vms.info_age` | Stáří info záznamu | Numeric (unsigned) | s | Doba od poslední aktualizace tabulky `info` |
+| `vms.timestamp_age` | Stáří timestamp dat | Numeric (unsigned) | s | Doba od posledních přijatých timestamp dat |
+| `vms.config_age` | Stáří konfiguračních dat | Numeric (unsigned) | s | Doba od posledních přijatých konfiguračních dat |
 | `vms.buf_rows_1` | Počet řádků v bufferu 1 | Numeric (unsigned) | | Počet řádků v první bufferové tabulce |
 | `vms.buf_rows_2` | Počet řádků v bufferu 2 | Numeric (unsigned) | | Počet řádků v druhé bufferové tabulce |
-| `vms.buf_age_1` | Stáří bufferu 1 | Numeric (unsigned) | s | Doba od poslední změny první bufferové tabulky |
-| `vms.buf_age_2` | Stáří bufferu 2 | Numeric (unsigned) | s | Doba od poslední změny druhé bufferové tabulky |
-| `vms.buf_bulk_1` | Bulk bufferu 1 | Numeric (unsigned) | | |
-| `vms.buf_bulk_2` | Bulk bufferu 2 | Numeric (unsigned) | | |
+| `vms.buf_age_1` | Stáří bufferu 1 | Numeric (unsigned) | s | Doba od posledních dat přijatých do bufferu 1 |
+| `vms.buf_age_2` | Stáří bufferu 2 | Numeric (unsigned) | s | Doba od posledních dat přijatých do bufferu 2 |
+| `vms.buf_bulk_1` | Doba bulk zápisu 1 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 1 |
+| `vms.buf_bulk_2` | Doba bulk zápisu 2 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 2 |
 
-Popis u části metrik se doplní později; v Zabbixu je nepovinný.
 
 ### UC3-R1
 **Popis:** Sada metrik, které agent odesílá do Zabbixu, je vedená jako tabulka v této PRS.
