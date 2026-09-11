@@ -16,7 +16,7 @@
 | UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Zbývá |
 | UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Zbývá |
 | UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá |
-| UC2-R5 | Turbína popsaná názvem, system_id a jedním až dvěma buffery | Zbývá |
+| UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Zbývá |
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Zbývá |
 | UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá |
@@ -24,6 +24,12 @@
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá |
 | UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Zbývá |
 | UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá |
+| UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Zbývá |
+| UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Zbývá |
+| UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Zbývá |
+| UC4-R4 | Stáří počítané v celých sekundách proti času měření | Zbývá |
+| UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Zbývá |
+| UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá |
 
 ## Účel projektu
 
@@ -144,8 +150,8 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 **Popis:** Každá turbína je v konfiguraci popsaná názvem, identifikátorem `system_id` a seznamem bufferů.
 **DoD:**
 - U každé turbíny se nastaví název, `system_id` a seznam názvů bufferů.
-- Seznam bufferů obsahuje jeden nebo dva buffery; konfiguraci s prázdným seznamem nebo s více než dvěma buffery agent odmítne jako neplatnou.
-- Turbína s jedním nastaveným bufferem je platná a agent u ní druhý buffer nevyžaduje.
+- Seznam bufferů obsahuje žádný, jeden nebo dva buffery; konfiguraci s více než dvěma buffery agent odmítne jako neplatnou.
+- Turbína bez nastaveného bufferu i turbína s jedním nastaveným bufferem je platná konfigurace.
 - Metriky turbíny se odesílají do Zabbixu pod názvem hostu ve tvaru `<location>_<název turbíny>`, tedy `location` a název turbíny spojené podtržítkem.
 - Název hostu je jednoznačný pro každou kombinaci lokality a turbíny, takže se metriky různých turbín ani různých lokalit nemíchají.
 - `system_id` určuje, které řádky se z databáze čtou pro danou turbínu.
@@ -215,13 +221,13 @@ Popis u části metrik se doplní později; v Zabbixu je nepovinný.
 - Typ položky se v tabulce neuvádí, protože všechny metriky jsou položky typu Zabbix trapper.
 
 ### UC3-R3
-**Popis:** Metriky vázané na buffer se odesílají pro každý buffer nastavený u dané turbíny.
+**Popis:** Metriky obou bufferů se odesílají vždy; u bufferu, který turbína nemá nastavený, mají hodnotu 0.
 **DoD:**
-- U turbíny se dvěma nastavenými buffery se odesílají metriky obou bufferů.
-- U turbíny s jedním nastaveným bufferem se odesílají metriky pouze tohoto bufferu.
-- Klíč metriky rozlišuje, ke kterému z bufferů turbíny hodnota patří.
+- Agent odesílá metriky obou bufferů pro každou turbínu, bez ohledu na počet bufferových tabulek nastavených u turbíny.
+- Metriky bufferu, který turbína nemá nastavený, mají hodnotu 0 – tedy u turbíny s jednou bufferovou tabulkou metriky druhého bufferu a u turbíny bez bufferové tabulky metriky obou.
+- Klíč metriky rozlišuje, ke kterému z bufferů hodnota patří.
 
-### UC3-R4
+### UC3-R4  
 **Popis:** Balíček obsahuje šablonu pro Zabbix odpovídající tabulce metrik a dokumentace obsahuje návod, podle kterého ji obsluha před nasazením do Zabbixu naimportuje.
 **DoD:**
 - Balíček obsahuje soubor se šablonou ve formátu YAML, který Zabbix umí naimportovat.
@@ -233,3 +239,63 @@ Popis u části metrik se doplní později; v Zabbixu je nepovinný.
 - Návod popisuje založení hostu `<location>_<název turbíny>`, import šablony z balíčku a přiřazení šablony tomuto hostu.
 - Návod neobsahuje nic nad rámec těchto tří kroků.
 - Návod je uvedený v rozcestníku v `README.md`.
+
+## UC4 – Získávání hodnot metrik z databáze BVMS
+
+Aktérem je agent. Cílem je naplnit sadu metrik z UC3 hodnotami z databáze `BVMS`. Spouštěčem je
+každý cyklus měření. Agent pro každou turbínu z konfigurace přečte její řádek z informační
+tabulky a metadata jejích bufferových tabulek, z nich spočítá hodnoty metrik a odešle je do
+Zabbixu. Zdroj každé metriky určuje tabulka níže.
+
+| Klíč metriky | Zdroj | Vstup | Pole zdroje | Výpočet |
+| --- | --- | --- | --- | --- |
+| `vms.speed` | řádek `info` turbíny | `info`, `system_id` | `Phase_Marker` | `1e8 / Phase_Marker * 60` |
+| `vms.info_age` | řádek `info` turbíny | `info`, `system_id` | `Date` | celé sekundy mezi `Date` a časem měření |
+| `vms.timestamp_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Timestamp` | celé sekundy mezi `Date_Timestamp` a časem měření |
+| `vms.config_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Config` | celé sekundy mezi `Date_Config` a časem měření |
+| `vms.buf_age_1` | řádek `info` turbíny | `info`, `system_id` | `Date_Buffer_1` | celé sekundy mezi `Date_Buffer_1` a časem měření |
+| `vms.buf_age_2` | řádek `info` turbíny | `info`, `system_id` | `Date_Buffer_2` | celé sekundy mezi `Date_Buffer_2` a časem měření |
+| `vms.buf_bulk_1` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_1` | přímo hodnota |
+| `vms.buf_bulk_2` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_2` | přímo hodnota |
+| `vms.buf_rows_1` | `information_schema.TABLES` | `database`, první bufferová tabulka turbíny | `TABLE_ROWS` | přímo hodnota |
+| `vms.buf_rows_2` | `information_schema.TABLES` | `database`, druhá bufferová tabulka turbíny | `TABLE_ROWS` | přímo hodnota |
+
+### UC4-R1
+**Popis:** Zdroj hodnoty každé metriky je popsaný tabulkou zdrojů v tomto use casu.
+**DoD:**
+- Tabulka uvádí u každé metriky ze sady v UC3 zdroj, vstup, pole zdroje a výpočet.
+- Agent počítá hodnoty metrik podle této tabulky.
+
+### UC4-R2
+**Popis:** Pro každou turbínu se čte právě její řádek informační tabulky.
+**DoD:**
+- Agent čte řádek z tabulky, jejíž název je v konfiguraci jako `info`.
+- Pro turbínu se čte řádek, jehož `SystemId` odpovídá `system_id` této turbíny.
+- Hodnoty jedné turbíny se nepočítají z řádku jiné turbíny.
+
+### UC4-R3
+**Popis:** Hodnoty se z řádku informační tabulky čtou podle názvů sloupců, ne podle jejich pozice.
+**DoD:**
+- Agent hodnoty vybírá podle názvu sloupce uvedeného v tabulce zdrojů.
+- Přidání sloupce do informační tabulky ani změna jejich pořadí nezmění hodnoty odeslaných metrik.
+
+### UC4-R4
+**Popis:** Metriky stáří jsou počtem celých sekund mezi zdrojovým datem a časem měření.
+**DoD:**
+- Hodnota metriky `*_age` je počet celých sekund mezi hodnotou zdrojového sloupce a časem měření daného cyklu.
+- Všechny metriky jedné turbíny v jednom cyklu se počítají proti témuž času měření.
+
+### UC4-R5
+**Popis:** Metriky bufferů se získávají ze dvou různých zdrojů podle toho, o kterou metriku jde.
+**DoD:**
+- `vms.buf_age_1` a `vms.buf_age_2` se počítají ze sloupců `Date_Buffer_1` a `Date_Buffer_2`, tedy z pevných pozic v informační tabulce.
+- `vms.buf_bulk_1` a `vms.buf_bulk_2` se berou ze sloupců `Time_bulk_1` a `Time_bulk_2`, rovněž z pevných pozic.
+- `vms.buf_rows_1` a `vms.buf_rows_2` se berou z `TABLE_ROWS` pro tabulku, jejíž název je první, resp. druhý v seznamu bufferů dané turbíny.
+- Název bufferové tabulky z konfigurace neovlivňuje, ze kterých sloupců informační tabulky se čte stáří a bulk.
+- Metriky bufferu, který turbína nemá nastavený, se odesílají s hodnotou 0; hodnoty ze sloupců informační tabulky se pro něj nepoužijí.
+
+### UC4-R6
+**Popis:** Agent opakuje cyklus měření s prodlevou 5 sekund mezi cykly.
+**DoD:**
+- Mezi dokončením jednoho cyklu měření a začátkem následujícího uplyne 5 sekund.
+- Jeden cyklus zahrnuje odeslání metrik všech turbín z konfigurace.
