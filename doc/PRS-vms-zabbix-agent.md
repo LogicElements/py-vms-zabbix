@@ -23,6 +23,7 @@
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá |
 | UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Zbývá |
+| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá |
 
 ## Účel projektu
 
@@ -219,3 +220,16 @@ Popis u části metrik se doplní později; v Zabbixu je nepovinný.
 - U turbíny se dvěma nastavenými buffery se odesílají metriky obou bufferů.
 - U turbíny s jedním nastaveným bufferem se odesílají metriky pouze tohoto bufferu.
 - Klíč metriky rozlišuje, ke kterému z bufferů turbíny hodnota patří.
+
+### UC3-R4
+**Popis:** Balíček obsahuje šablonu pro Zabbix odpovídající tabulce metrik a dokumentace obsahuje návod, podle kterého ji obsluha před nasazením do Zabbixu naimportuje.
+**DoD:**
+- Balíček obsahuje soubor se šablonou ve formátu YAML, který Zabbix umí naimportovat.
+- Šablona obsahuje právě metriky z tabulky výše – žádnou navíc a žádnou nevynechává.
+- Každá položka šablony je typu Zabbix trapper a má klíč, název, typ hodnoty a jednotku podle tabulky.
+- Šablona se do Zabbixu naimportuje bez ruční úpravy souboru.
+- Agent sám v Zabbixu žádnou konfiguraci nezakládá a nepotřebuje přístup k Zabbix API.
+- Ve složce `doc/` je návod k nastavení Zabbixu pro tuto sadu metrik.
+- Návod popisuje založení hostu `<location>_<název turbíny>`, import šablony z balíčku a přiřazení šablony tomuto hostu.
+- Návod neobsahuje nic nad rámec těchto tří kroků.
+- Návod je uvedený v rozcestníku v `README.md`.
