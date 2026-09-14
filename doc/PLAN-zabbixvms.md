@@ -27,7 +27,6 @@
 | 6 | Logování a vlastní stav agenta | [ ] |
 | 7 | Šablona pro Zabbix a návod | [ ] |
 
-Kroky jsou rozepsané pro etapy 1 až 3; u etap 4 až 7 se doplní, až na ně přijde řada.
 
 ### Etapa 1 – Kostra balíčku a konfigurace
 **Účel:** Založit strukturu balíčku a zprovoznit konfiguraci v `ProgramData`.
@@ -81,16 +80,51 @@ se neověřovalo, aby do něj nešla testovací data.
 
 ### Etapa 4 – Služba Windows
 **Účel:** Zaregistrovat agenta jako službu, která startuje se systémem a jde ovládat i bez práv administrátora.
-**Řeší:** UC1-R2, UC1-R3, UC1-R7
+**Řeší:** UC1-R2, UC1-R3, UC1-R4, UC1-R7, UC2-R4
+**Kroky:**
+1. Implementovat v `service.py` třídu `ZabbixVmsService` nad `win32serviceutil.ServiceFramework` s názvem `ZabbixVms`, zobrazovaným názvem „VMS zabbix agent" a popisem služby.
+2. Načíst v `SvcDoRun` konfiguraci přes `load_config()` a spustit `Agent.run()`; v `SvcStop` zavolat `Agent.stop()` a ohlásit SCM zastavení.
+3. Rozšířit `main()` o příkazy pro registraci a odregistraci služby přes `win32serviceutil.HandleCommandLine`.
+4. Nastavit při registraci typ spuštění na Automatic.
+5. Nastavit při registraci deskriptor zabezpečení služby tak, aby uživatelé bez práv administrátora směli službu dotazovat, spouštět a zastavovat, ne však měnit její konfiguraci ani ji odregistrovat.
+6. Napsat testy proti podvrženému agentovi: `SvcDoRun` spustí smyčku, `SvcStop` ji ukončí, sestavení deskriptoru zabezpečení z požadovaných práv.
+7. Ručně ověřit: `sc query ZabbixVms` po registraci, start a stop, stav RUNNING po restartu serveru bez přihlášení, ovládání pod účtem bez práv administrátora, běh služby při nedostupné MySQL a konfigurační soubor beze změny po startu a zastavení.
 
 ### Etapa 5 – Tray aplikace
 **Účel:** Zobrazit stav služby ikonou v systray a umožnit z ní službu ovládat a otevřít konfiguraci.
 **Řeší:** UC1-R5, UC1-R6, UC1-R8, UC2-R8
+**Kroky:**
+1. Vytvořit `servicecontrol.py` s třídou `ServiceController`: zjištění stavu služby a její spuštění, zastavení a restart přes `win32service`.
+2. Implementovat v `tray.py` jednobarevnou ikonu přes `Shell_NotifyIcon` z `win32gui`, s názvem agenta v tooltipu.
+3. Odvodit barvu ikony ze stavu služby: jedna barva pro RUNNING, odlišná pro stav, kdy služba neběží.
+4. Zjišťovat stav služby s periodou 5 sekund a při jeho změně ikonu překreslit.
+5. Sestavit kontextové menu s položkami Spustit, Zastavit, Restartovat a Open configuration.
+6. Otevřít z položky Open configuration soubor `config_path()` v editoru přiřazeném systémem.
+7. Zaregistrovat při instalaci automatické spuštění tray aplikace po přihlášení uživatele.
+8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Open configuration.
+9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
 
 ### Etapa 6 – Logování a vlastní stav agenta
 **Účel:** Zaznamenat chyby do logu a Event Logu a odeslat stav agenta do Zabbixu.
 **Řeší:** UC5-R1, UC5-R2, UC5-R3
+**Kroky:**
+1. Nastavit logování do souboru ve složce `config_path().parent` přes `RotatingFileHandler`, 1 MB na soubor a 5 uchovaných souborů, se záznamem ve tvaru časová značka, úroveň a text.
+2. Zapisovat do logu start a zastavení služby, neplatnou konfiguraci, nedostupnost MySQL i Zabbixu a hodnoty odmítnuté Zabbixem.
+3. Umožnit zápis do téhož logu službě i tray aplikaci současně.
+4. Zapisovat start, zastavení a chyby bránící běhu do Windows Event Logu pod zdrojem `ZabbixVms`.
+5. Odvodit v `Agent` stav: 0 po cyklu bez chyby, 1 při varování, po kterém cyklus pokračuje, 2 při chybě bránící získat nebo odeslat hodnoty.
+6. Odesílat v každém cyklu `vms.agent_status` a `vms.agent_error` na host každé turbíny, s textem zkráceným na 255 znaků.
+7. Napsat testy proti podvrženým objektům: rotace logu po dosažení velikosti, stav 0, 1 a 2 podle průběhu cyklu, prázdný `vms.agent_error` při stavu 0, zkrácení textu na 255 znaků, odeslání obou metrik na každý host.
+8. Ručně ověřit záznam startu a zastavení služby v Event Vieweru.
 
 ### Etapa 7 – Šablona pro Zabbix a návod
 **Účel:** Vygenerovat šablonu z katalogu metrik a popsat její nasazení.
 **Řeší:** UC3-R4, UC5-R4
+**Kroky:**
+1. Vytvořit `template.py`, který z katalogu `METRICS` sestaví šablonu ve formátu YAML; každá metrika je položka typu Zabbix trapper s klíčem, názvem, typem hodnoty a jednotkou z katalogu.
+2. Doplnit do šablony value map překládající hodnoty 0, 1 a 2 metriky `vms.agent_status` na text.
+3. Doplnit do šablony tři triggery: `vms.agent_status` větší než 0, neprázdný `vms.agent_error` s textem chyby ve jméně triggeru, a nedoručení žádné hodnoty po dobu 5 minut.
+4. Vygenerovat `src/zabbixvms/data/zabbix_template.yaml` a zahrnout ho do balíčku.
+5. Napsat testy: klíče položek šablony odpovídají `METRICS` bez přebytků a bez chybějících, každá položka je typu trapper a má typ hodnoty i jednotku podle katalogu, šablona je platný YAML s value map a třemi triggery.
+6. Sepsat `doc/NAVOD-zabbix.md` se třemi kroky: založení hostu `<location>_<název turbíny>`, import šablony z balíčku a přiřazení šablony hostu.
+7. Doplnit odkaz na návod do rozcestníku v `README.md`.
