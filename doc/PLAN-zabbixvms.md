@@ -19,7 +19,7 @@
 
 | # | Název | Hotovo |
 | --- | --- | --- |
-| 1 | Kostra balíčku a konfigurace | [ ] |
+| 1 | Kostra balíčku a konfigurace | [x] |
 | 2 | Katalog metrik a sběr z databáze | [ ] |
 | 3 | Odesílání a smyčka agenta | [ ] |
 | 4 | Služba Windows | [ ] |
@@ -41,6 +41,10 @@ Kroky jsou rozepsané pro etapy 1 až 3; u etap 4 až 7 se doplní, až na ně p
 6. Implementovat cestu `C:\ProgramData\LogicElements\ZabbixVms\config.json` a nasazení výchozí konfigurace z `data/config_default.json`, pokud soubor ještě neexistuje.
 7. Implementovat kontrolu rozsahů: 1 až 4 turbíny, 0 až 2 buffery u turbíny.
 8. Napsat testy: uložení a načtení konfigurace se shodnými hodnotami, nasazení výchozí konfigurace do prázdné složky, ponechání existujícího souboru beze změny, odmítnutí konfigurace mimo povolené rozsahy.
+
+**Poznámka k dokončení:** UC2-R4 a UC2-R6 zůstávají ve stavu Zbývá – jejich kód je hotový
+(agent konfiguraci nepřepisuje, skupina parametrů databáze je nastavená), ale jejich DoD
+se ověří až proti běžící službě (etapa 4) a proti čtení z databáze (etapa 2).
 
 ### Etapa 2 – Katalog metrik a sběr z databáze
 **Účel:** Definovat sadu metrik a naplnit ji hodnotami z databáze `BVMS`.

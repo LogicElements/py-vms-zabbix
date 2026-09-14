@@ -4,7 +4,7 @@
 
 | Requirement | Popis | Stav | Test |
 | --- | --- | --- | --- |
-| UC1-R1 | Implementace v Pythonu, jeden balíček se službou i tray aplikací | Zbývá | |
+| UC1-R1 | Implementace v Pythonu, jeden balíček se službou i tray aplikací | Hotovo | tests/test_entrypoints.py |
 | UC1-R2 | Registrace a ovládání jako služba Windows `ZabbixVms` | Zbývá | |
 | UC1-R3 | Automatický start se systémem bez přihlášení uživatele | Zbývá | |
 | UC1-R4 | Nepřetržitý běh, chyba jednoho cyklu službu neukončí | Zbývá | |
@@ -12,13 +12,13 @@
 | UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Zbývá | |
 | UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Zbývá | |
 | UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá | |
-| UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Zbývá | |
+| UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Hotovo | tests/test_config.py |
 | UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Zbývá | |
-| UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Zbývá | |
+| UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Hotovo | tests/test_config.py |
 | UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá | |
 | UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Zbývá | |
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá | |
-| UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Zbývá | |
+| UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá | |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá | |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá | |

@@ -22,20 +22,24 @@ Běží pouze na Windows (pro integraci s Windows Service se používá `pywin32
 
 ## Použití
 
-Spuštění na popředí pro testování:
+Instalace vytvoří dva vstupní body:
+
+- `zabbixvms-service` – služba Windows `ZabbixVms`,
+- `zabbixvms-tray` – ikona v systray, spouští se bez konzolového okna.
+
+Konfigurace (přístupové údaje k MySQL a Zabbixu, seznam monitorovaných turbín) je JSON
+v souboru `C:\ProgramData\LogicElements\ZabbixVms\config.json`. Pokud soubor neexistuje,
+vytvoří se při prvním spuštění z výchozí šablony dodané v balíčku; existující soubor
+zůstává beze změny i při aktualizaci balíčku.
+
+## Vývoj
+
+Testy se spouští z kořene repozitáře:
 
 ```bash
-python -m zabagent.ZabAgent
+pip install -e ".[dev]"
+pytest
 ```
-
-Instalace a spuštění jako služba Windows (`ZabAgent`):
-
-```bash
-python -m zabagent.ZabAgent install
-python -m zabagent.ZabAgent start
-```
-
-Konfigurace (přístupové údaje k MySQL a Zabbixu, seznam monitorovaných generátorů) je uložena jako JSON v souboru `src/zabagent/data/config_default.json` a načítá se přes `ZabConfig.Config`.
 
 ## Licence
 

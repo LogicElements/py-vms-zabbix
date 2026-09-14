@@ -28,6 +28,17 @@ dependencies = [
     "PyYAML",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+zabbixvms-service = "zabbixvms.service:main"
+
+[project.gui-scripts]
+zabbixvms-tray = "zabbixvms.tray:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
@@ -35,7 +46,11 @@ where = ["src"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-zabagent = ["data/*.json"]
+zabbixvms = ["data/*.json", "data/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
 [project.urls]
 "Homepage" = "https://github.com/LogicElements/py-vms-zabbix"

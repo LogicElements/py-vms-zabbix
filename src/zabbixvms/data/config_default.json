@@ -1,0 +1,28 @@
+{
+  "py/object": "zabbixvms.config.Config",
+  "zabbix": {
+    "py/object": "zabbixvms.config.ZabbixConfig",
+    "server": "zabbix.logicelements.cz",
+    "port": 10051,
+    "location": ""
+  },
+  "database": {
+    "py/object": "zabbixvms.config.DatabaseConfig",
+    "host": "localhost",
+    "database": "BVMS",
+    "user": "VMS",
+    "password": "Vms2015",
+    "info_table": "info_le"
+  },
+  "turbines": [
+    {
+      "py/object": "zabbixvms.config.Turbine",
+      "name": "TEST",
+      "system_id": 10,
+      "buffers": [
+        "buffer_le",
+        "buffer_le_3"
+      ]
+    }
+  ]
+}
