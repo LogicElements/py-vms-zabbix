@@ -44,9 +44,13 @@ class FakeController:
 class FakeIcon:
     def __init__(self):
         self.colors = []
+        self.quits = 0
 
     def set_color(self, color):
         self.colors.append(color)
+
+    def quit(self):
+        self.quits += 1
 
 
 def make_app(state=win32service.SERVICE_STOPPED):
@@ -103,12 +107,12 @@ def test_state_is_asked_for_every_five_seconds():
     assert POLL_INTERVAL == 5
 
 
-def test_menu_has_the_four_items():
+def test_menu_has_its_items_in_order():
     """UC1-R6, UC2-R8: the context menu holds exactly these items, in this order."""
     app, _, _, _ = make_app()
 
     assert app.menu_labels == ("Spustit", "Zastavit", "Restartovat",
-                               "Otevřít konfiguraci")
+                               "Otevřít konfiguraci", "Ukončit")
 
 
 def test_start_item_starts_the_service():
@@ -155,6 +159,29 @@ def test_configuration_item_opens_the_active_configuration():
     app.invoke(3)
 
     assert opened == [str(config_path())]
+
+
+def test_quit_item_ends_the_tray():
+    """Ukončit lets the message loop finish, so the icon can be taken away."""
+    app, _, icon, _ = make_app()
+
+    app.invoke(4)
+
+    assert icon.quits == 1
+
+
+def test_quit_leaves_the_service_alone():
+    """Ending the tray does not touch the service; it keeps running."""
+    app, controller, _, _ = make_app(win32service.SERVICE_RUNNING)
+
+    app.invoke(4)
+
+    assert controller.calls == []
+
+
+def test_quit_without_an_icon_is_harmless():
+    """quit() before the icon exists must not fail."""
+    TrayApp(controller=FakeController(), open_file=lambda path: None).quit()
 
 
 def test_every_menu_item_has_an_action():

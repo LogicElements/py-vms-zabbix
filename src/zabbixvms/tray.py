@@ -46,6 +46,7 @@ MENU = (
     ("Zastavit", "stop_service"),
     ("Restartovat", "restart_service"),
     ("Otevřít konfiguraci", "open_configuration"),
+    ("Ukončit", "quit"),
 )
 
 # Window message the shell sends for mouse actions on the icon.
@@ -106,6 +107,11 @@ class TrayApp:
     def open_configuration(self) -> None:
         """Open the active configuration in whatever the system opens .json with."""
         self._open_file(str(config_path()))
+
+    def quit(self) -> None:
+        """End the tray application; the service itself keeps running."""
+        if self._icon is not None:
+            self._icon.quit()
 
     def run(self) -> None:
         """Show the icon and serve it until the user quits."""
@@ -181,6 +187,10 @@ class TrayIcon:
 
     def pump(self) -> None:
         win32gui.PumpMessages()
+
+    def quit(self) -> None:
+        """Let the message loop finish, so run() can take the icon away."""
+        win32gui.PostQuitMessage(0)
 
     def _notify_data(self, icon_handle):
         self._icon_handle = icon_handle
