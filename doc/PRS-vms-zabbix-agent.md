@@ -2,34 +2,34 @@
 
 ## Přehled requirementů
 
-| Requirement | Popis | Stav |
-| --- | --- | --- |
-| UC1-R1 | Implementace v Pythonu, jeden balíček se službou i tray aplikací | Zbývá |
-| UC1-R2 | Registrace a ovládání jako služba Windows `ZabbixVms` | Zbývá |
-| UC1-R3 | Automatický start se systémem bez přihlášení uživatele | Zbývá |
-| UC1-R4 | Nepřetržitý běh, chyba jednoho cyklu službu neukončí | Zbývá |
-| UC1-R5 | Ikona v systray signalizující barvou stav služby | Zbývá |
-| UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Zbývá |
-| UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Zbývá |
-| UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá |
-| UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Zbývá |
-| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Zbývá |
-| UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Zbývá |
-| UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá |
-| UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Zbývá |
-| UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá |
-| UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Zbývá |
-| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá |
-| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá |
-| UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá |
-| UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Zbývá |
-| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá |
-| UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Zbývá |
-| UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Zbývá |
-| UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Zbývá |
-| UC4-R4 | Stáří počítané v celých sekundách proti času měření | Zbývá |
-| UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Zbývá |
-| UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá |
+| Requirement | Popis | Stav | Test |
+| --- | --- | --- | --- |
+| UC1-R1 | Implementace v Pythonu, jeden balíček se službou i tray aplikací | Zbývá | |
+| UC1-R2 | Registrace a ovládání jako služba Windows `ZabbixVms` | Zbývá | |
+| UC1-R3 | Automatický start se systémem bez přihlášení uživatele | Zbývá | |
+| UC1-R4 | Nepřetržitý běh, chyba jednoho cyklu službu neukončí | Zbývá | |
+| UC1-R5 | Ikona v systray signalizující barvou stav služby | Zbývá | |
+| UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Zbývá | |
+| UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Zbývá | |
+| UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá | |
+| UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Zbývá | |
+| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Zbývá | |
+| UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Zbývá | |
+| UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá | |
+| UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Zbývá | |
+| UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá | |
+| UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Zbývá | |
+| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá | |
+| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá | |
+| UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá | |
+| UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Zbývá | |
+| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá | |
+| UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Zbývá | |
+| UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Zbývá | |
+| UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Zbývá | |
+| UC4-R4 | Stáří počítané v celých sekundách proti času měření | Zbývá | |
+| UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Zbývá | |
+| UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá | |
 
 ## Účel projektu
 
