@@ -141,9 +141,10 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Open configuration.
 9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
 
-**Stav:** kroky 1 až 8 jsou hotové, krok 9 je ověřený jen zčásti. Barvy ikony a tři akce
-z menu prošly, takže UC1-R5 a UC1-R6 jsou Hotovo. Zbývá ověřit otevření konfigurace bez
-výzvy UAC (UC2-R8) a automatické spuštění po přihlášení (UC1-R8).
+**Stav:** kroky 1 až 8 jsou hotové, krok 9 je ověřený až na jednu položku. Barvy ikony,
+tři akce z menu i otevření konfigurace prošly, takže UC1-R5, UC1-R6 a UC2-R8 jsou Hotovo.
+Zbývá jediné: automatické spuštění po přihlášení (UC1-R8), na které je potřeba odhlášení
+a restart serveru.
 
 Nad rámec PRS má menu ještě položku Ukončit, protože jinak nešla tray aplikace ukončit
 jinak než přes Správce úloh. Ptá se na potvrzení s předvybraným Ne, aby ji omylem

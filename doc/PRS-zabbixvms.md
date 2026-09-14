@@ -19,7 +19,7 @@
 | UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Hotovo | tests/test_sender.py |
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
-| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá | |
+| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Hotovo | tests/test_tray.py |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Hotovo | tests/test_collector.py |
