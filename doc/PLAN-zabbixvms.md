@@ -90,6 +90,33 @@ se neověřovalo, aby do něj nešla testovací data.
 6. Napsat testy proti podvrženému agentovi: `SvcDoRun` spustí smyčku, `SvcStop` ji ukončí, sestavení deskriptoru zabezpečení z požadovaných práv.
 7. Ručně ověřit: `sc query ZabbixVms` po registraci, start a stop, stav RUNNING po restartu serveru bez přihlášení, ovládání pod účtem bez práv administrátora, běh služby při nedostupné MySQL a konfigurační soubor beze změny po startu a zastavení.
 
+**Stav:** kroky 1 až 6 jsou hotové, krok 7 zbývá – vyžaduje práva administrátora. Do jeho
+dokončení zůstávají UC1-R2, UC1-R3, UC1-R4, UC1-R7 a UC2-R4 ve stavu Zbývá.
+
+Postup ručního ověření, v prostředí s nainstalovaným balíčkem (`pip install .`) a
+z příkazové řádky spuštěné jako administrátor:
+
+```
+zabbixvms-service install
+sc qc ZabbixVms                 # START_TYPE musí být AUTO_START (UC1-R3)
+sc sdshow ZabbixVms             # v SDDL přibyl záznam pro BU, tedy BUILTIN\Users (UC1-R7)
+sc start ZabbixVms              # -> RUNNING (UC1-R2)
+sc stop ZabbixVms               # -> STOPPED
+```
+
+Pod účtem **bez** práv administrátora musí `sc query`, `sc start` a `sc stop` projít,
+zatímco `sc config ZabbixVms start= disabled` a `sc delete ZabbixVms` musí selhat na
+odepřený přístup (UC1-R7). Pro UC1-R3 restartovat server a bez přihlášení ověřit
+`sc query ZabbixVms`. Pro UC1-R4 zastavit MySQL a zkontrolovat, že služba zůstává
+RUNNING a po nastartování MySQL zase odesílá. Pro UC2-R4 porovnat otisk konfigurace
+před startem a po zastavení:
+
+```
+Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
+```
+
+Úklid po ověření: `zabbixvms-service remove`.
+
 ### Etapa 5 – Tray aplikace
 **Účel:** Zobrazit stav služby ikonou v systray a umožnit z ní službu ovládat a otevřít konfiguraci.
 **Řeší:** UC1-R5, UC1-R6, UC1-R8, UC2-R8

@@ -25,12 +25,16 @@ def test_tray_entry_point_starts_without_a_console(pyproject):
     assert "zabbixvms-tray" not in pyproject["project"].get("scripts", {})
 
 
-def test_entry_points_are_callable():
-    """UC1-R1: both entry points exist in the package and can be called."""
+def test_entry_points_exist_in_the_package():
+    """UC1-R1: both entry points the distribution declares are really there.
+
+    They are not called here: the service entry point is a command line of its own
+    (tests/test_service.py covers what its commands do).
+    """
     from zabbixvms import service, tray
 
-    assert service.main() is None
-    assert tray.main() is None
+    assert callable(service.main)
+    assert callable(tray.main)
 
 
 def test_package_data_carries_the_default_configuration(pyproject):
