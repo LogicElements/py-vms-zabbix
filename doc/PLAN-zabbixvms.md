@@ -13,7 +13,7 @@
 - setuptools, zdroje v `src/`, struktura modulů podle [návrhu](NAVRH-zabbixvms.md)
 - závislosti: `mysql-connector-python`, `jsonpickle`, `zabbix_utils`, `pywin32`, `PyYAML`
 - testy: `pytest`; výpočty a konfigurace proti podvrženým objektům, databázové dotazy proti testovací databázi `BVMS`
-- služba a ikona v systray se ověřují ručně (`sc query`, restart serveru, pohled na ikonu)
+- služba a ikona v systray se ověřují ručně (`sc.exe query`, restart serveru, pohled na ikonu)
 
 ## Etapy
 
@@ -88,26 +88,27 @@ se neověřovalo, aby do něj nešla testovací data.
 4. Nastavit při registraci typ spuštění na Automatic.
 5. Nastavit při registraci deskriptor zabezpečení služby tak, aby uživatelé bez práv administrátora směli službu dotazovat, spouštět a zastavovat, ne však měnit její konfiguraci ani ji odregistrovat.
 6. Napsat testy proti podvrženému agentovi: `SvcDoRun` spustí smyčku, `SvcStop` ji ukončí, sestavení deskriptoru zabezpečení z požadovaných práv.
-7. Ručně ověřit: `sc query ZabbixVms` po registraci, start a stop, stav RUNNING po restartu serveru bez přihlášení, ovládání pod účtem bez práv administrátora, běh služby při nedostupné MySQL a konfigurační soubor beze změny po startu a zastavení.
+7. Ručně ověřit: `sc.exe query ZabbixVms` po registraci, start a stop, stav RUNNING po restartu serveru bez přihlášení, ovládání pod účtem bez práv administrátora, běh služby při nedostupné MySQL a konfigurační soubor beze změny po startu a zastavení.
 
 **Stav:** kroky 1 až 6 jsou hotové, krok 7 zbývá – vyžaduje práva administrátora. Do jeho
 dokončení zůstávají UC1-R2, UC1-R3, UC1-R4, UC1-R7 a UC2-R4 ve stavu Zbývá.
 
 Postup ručního ověření, v prostředí s nainstalovaným balíčkem (`pip install .`) a
-z příkazové řádky spuštěné jako administrátor:
+z příkazové řádky spuštěné jako administrátor. Píše se `sc.exe`, ne `sc` – v PowerShellu
+je `sc` alias pro `Set-Content`, takže samotné `sc` správce služeb nespustí:
 
 ```
 zabbixvms-service install
-sc qc ZabbixVms                 # START_TYPE musí být AUTO_START (UC1-R3)
-sc sdshow ZabbixVms             # v SDDL přibyl záznam pro BU, tedy BUILTIN\Users (UC1-R7)
-sc start ZabbixVms              # -> RUNNING (UC1-R2)
-sc stop ZabbixVms               # -> STOPPED
+sc.exe qc ZabbixVms                 # START_TYPE musí být AUTO_START (UC1-R3)
+sc.exe sdshow ZabbixVms             # v SDDL přibyl záznam pro BU, tedy BUILTIN\Users (UC1-R7)
+sc.exe start ZabbixVms              # -> RUNNING (UC1-R2)
+sc.exe stop ZabbixVms               # -> STOPPED
 ```
 
-Pod účtem **bez** práv administrátora musí `sc query`, `sc start` a `sc stop` projít,
-zatímco `sc config ZabbixVms start= disabled` a `sc delete ZabbixVms` musí selhat na
+Pod účtem **bez** práv administrátora musí `sc.exe query`, `sc.exe start` a `sc.exe stop` projít,
+zatímco `sc.exe config ZabbixVms start= disabled` a `sc.exe delete ZabbixVms` musí selhat na
 odepřený přístup (UC1-R7). Pro UC1-R3 restartovat server a bez přihlášení ověřit
-`sc query ZabbixVms`. Pro UC1-R4 zastavit MySQL a zkontrolovat, že služba zůstává
+`sc.exe query ZabbixVms`. Pro UC1-R4 zastavit MySQL a zkontrolovat, že služba zůstává
 RUNNING a po nastartování MySQL zase odesílá. Pro UC2-R4 porovnat otisk konfigurace
 před startem a po zastavení:
 
@@ -129,7 +130,7 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 6. Otevřít z položky Open configuration soubor `config_path()` v editoru přiřazeném systémem.
 7. Zaregistrovat při instalaci automatické spuštění tray aplikace po přihlášení uživatele.
 8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Open configuration.
-9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
+9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
 
 ### Etapa 6 – Logování a vlastní stav agenta
 **Účel:** Zaznamenat chyby do logu a Event Logu a odeslat stav agenta do Zabbixu.
