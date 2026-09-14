@@ -30,6 +30,10 @@
 | UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Zbývá | |
 | UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Zbývá | |
 | UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá | |
+| UC5-R1 | Logovací soubor s provozními událostmi a chybami | Zbývá | |
+| UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Zbývá | |
+| UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Zbývá | |
+| UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Zbývá | |
 
 ## Účel projektu
 
@@ -203,6 +207,8 @@ Sada metrik odesílaných do Zabbixu:
 | `vms.buf_age_2` | Stáří bufferu 2 | Numeric (float) | s | Doba od posledních dat přijatých do bufferu 2. Hodnota -1 znamená, že údaj není k dispozici. |
 | `vms.buf_bulk_1` | Doba bulk zápisu 1 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 1 |
 | `vms.buf_bulk_2` | Doba bulk zápisu 2 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 2 |
+| `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`. |
+| `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku. |
 
 
 ### UC3-R1
@@ -258,6 +264,8 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 | `vms.buf_bulk_2` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_2` | přímo hodnota |
 | `vms.buf_rows_1` | `information_schema.TABLES` | `database`, první bufferová tabulka turbíny | `TABLE_ROWS` | přímo hodnota |
 | `vms.buf_rows_2` | `information_schema.TABLES` | `database`, druhá bufferová tabulka turbíny | `TABLE_ROWS` | přímo hodnota |
+| `vms.agent_status` | vlastní stav agenta | – | – | 0, 1 nebo 2 podle průběhu cyklu |
+| `vms.agent_error` | vlastní stav agenta | – | – | text poslední chyby, jinak prázdný řetězec |
 
 ### UC4-R1
 **Popis:** Zdroj hodnoty každé metriky je popsaný tabulkou zdrojů v tomto use casu.
@@ -299,3 +307,42 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 **DoD:**
 - Mezi dokončením jednoho cyklu měření a začátkem následujícího uplyne 5 sekund.
 - Jeden cyklus zahrnuje odeslání metrik všech turbín z konfigurace.
+
+## UC5 – Hlášení chyb a provozních událostí
+
+Aktérem je obsluha serveru VMS. Cílem je poznat, že agent sám nefunguje nebo že jeho hodnoty
+nedoputují do Zabbixu, a mít podklad pro nápravu. Spouštěčem je chyba za běhu: neplatná
+konfigurace, nedostupná databáze nebo hodnoty odmítnuté Zabbixem. Agent události zapisuje do
+logovacího souboru a ty zásadní i do Windows Event Logu.
+
+### UC5-R1
+**Popis:** Agent zapisuje provozní události a chyby do logovacího souboru.
+**DoD:**
+- Logovací soubor je ve stejné složce jako konfigurace, tedy `C:\ProgramData\LogicElements\ZabbixVms\`.
+- Každý záznam obsahuje časovou značku, úroveň a text události.
+- Zaznamenává se start a zastavení služby, neplatná konfigurace, nedostupnost MySQL i Zabbixu a hodnoty odmítnuté Zabbixem.
+- Logovací soubor se rotuje po dosažení 1 MB a uchovává se posledních 5 souborů, takže objem logů neroste bez omezení.
+- Do logu smí zapisovat služba i tray aplikace, aniž by si navzájem poškodily záznamy.
+
+### UC5-R2
+**Popis:** Agent zapisuje start, zastavení a chyby bránící běhu do Windows Event Logu.
+**DoD:**
+- Start a zastavení služby se objeví v Event Vieweru pod zdrojem `ZabbixVms`.
+- Chyba, která agentovi brání odesílat metriky, se zapíše jako událost typu Error.
+- Běžné provozní záznamy se do Event Logu nezapisují; ty zůstávají jen v logovacím souboru.
+
+### UC5-R3
+**Popis:** Agent odesílá svůj vlastní stav do Zabbixu jako dvojici metrik.
+**DoD:**
+- V každém cyklu odešle agent `vms.agent_status` a `vms.agent_error` na každý host turbíny, kterou má v konfiguraci.
+- `vms.agent_status` má hodnotu 0, proběhl-li celý cyklus bez chyby, 1 při varování, po kterém agent pokračuje, a 2 při chybě, která mu brání získat nebo odeslat hodnoty metrik.
+- `vms.agent_error` nese text poslední chyby nebo varování; při stavu 0 je prázdný.
+- Text chyby odpovídá záznamu v logovacím souboru a zkracuje se na 255 znaků, aby se vešel do položky typu Character.
+
+### UC5-R4
+**Popis:** Šablona pro Zabbix obsahuje mapování stavů a triggery, které chybu ohlásí.
+**DoD:**
+- Šablona obsahuje value map, která u `vms.agent_status` překládá hodnoty 0, 1 a 2 na text.
+- Šablona obsahuje trigger, který se spustí, je-li `vms.agent_status` větší než 0.
+- Šablona obsahuje trigger, který se spustí při neprázdném `vms.agent_error`, a text chyby je součástí jména triggeru.
+- Šablona obsahuje trigger, který se spustí, nedorazí-li na host žádná hodnota po dobu 5 minut; ten pokrývá i případ, kdy agent neběží nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.
