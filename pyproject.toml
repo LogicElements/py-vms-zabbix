@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vms-zabbix-agent"
+name = "zabbixvms"
 description = "Zabbix monitoring agent for Logic Elements VMS deployments"
 version = "0.1.0"
 authors = [
@@ -21,10 +21,11 @@ keywords = ["logicelements", "vibration", "vms", "zabbix"]
 
 requires-python = ">=3.12"
 dependencies = [
-    "pyvms",
+    "mysql-connector-python",
     "jsonpickle",
     "zabbix_utils",
     "pywin32",
+    "PyYAML",
 ]
 
 [tool.setuptools.packages.find]
