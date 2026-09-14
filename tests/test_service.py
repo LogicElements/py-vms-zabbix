@@ -168,6 +168,7 @@ def test_install_registers_with_automatic_start(monkeypatch):
     monkeypatch.setattr(service_module.win32serviceutil, "InstallService",
                         lambda **kwargs: captured.update(kwargs))
     monkeypatch.setattr(service_module, "grant_user_control", lambda: None)
+    monkeypatch.setattr(service_module, "register_tray_autostart", lambda: None)
 
     service_module.install()
 
@@ -184,6 +185,7 @@ def test_install_grants_the_rights_of_ordinary_users(monkeypatch):
                         lambda **kwargs: None)
     monkeypatch.setattr(service_module, "grant_user_control",
                         lambda: granted.append(True))
+    monkeypatch.setattr(service_module, "register_tray_autostart", lambda: None)
 
     service_module.install()
 
@@ -195,10 +197,63 @@ def test_remove_unregisters_the_service(monkeypatch):
     removed = []
     monkeypatch.setattr(service_module.win32serviceutil, "RemoveService",
                         removed.append)
+    monkeypatch.setattr(service_module, "unregister_tray_autostart", lambda: None)
 
     service_module.remove()
 
     assert removed == [SERVICE_NAME]
+
+
+def test_install_registers_the_tray_for_automatic_start(monkeypatch):
+    """UC1-R8: the automatic start of the tray is set up by the installation."""
+    registered = []
+    monkeypatch.setattr(service_module.win32serviceutil, "InstallService",
+                        lambda **kwargs: None)
+    monkeypatch.setattr(service_module, "grant_user_control", lambda: None)
+    monkeypatch.setattr(service_module, "register_tray_autostart",
+                        lambda: registered.append(True))
+
+    service_module.install()
+
+    assert registered == [True]
+
+
+def test_remove_takes_the_tray_out_of_automatic_start(monkeypatch):
+    """Unregistering the agent leaves no entry pointing at a missing command."""
+    unregistered = []
+    monkeypatch.setattr(service_module.win32serviceutil, "RemoveService",
+                        lambda name: None)
+    monkeypatch.setattr(service_module, "unregister_tray_autostart",
+                        lambda: unregistered.append(True))
+
+    service_module.remove()
+
+    assert unregistered == [True]
+
+
+def test_autostart_is_registered_for_every_user_of_the_machine():
+    """UC1-R8: the entry is machine-wide, so it works for whoever logs on."""
+    assert service_module.TRAY_RUN_KEY == \
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    assert service_module.TRAY_COMMAND == "zabbixvms-tray"
+
+
+def test_tray_executable_is_taken_from_beside_the_running_interpreter(monkeypatch, tmp_path):
+    """The tray executable installed by the same package is the one registered."""
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    (scripts / "zabbixvms-tray.exe").write_bytes(b"")
+    monkeypatch.setattr(service_module.sys, "executable", str(scripts / "python.exe"))
+
+    assert service_module.tray_executable() == str(scripts / "zabbixvms-tray.exe")
+
+
+def test_missing_tray_executable_is_reported(monkeypatch, tmp_path):
+    monkeypatch.setattr(service_module.sys, "executable", str(tmp_path / "python.exe"))
+    monkeypatch.setattr(service_module.shutil, "which", lambda command: None)
+
+    with pytest.raises(FileNotFoundError):
+        service_module.tray_executable()
 
 
 @pytest.mark.parametrize("command, expected", [("install", "install"), ("remove", "remove")])

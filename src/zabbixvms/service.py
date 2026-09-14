@@ -7,9 +7,13 @@ but not to change its configuration or remove it.
 
 from __future__ import annotations
 
+import shutil
 import sys
+from pathlib import Path
 
 import ntsecuritycon
+import win32api
+import win32con
 import win32security
 import win32service
 import win32serviceutil
@@ -20,6 +24,12 @@ from zabbixvms.config import load_config
 SERVICE_NAME = "ZabbixVms"
 DISPLAY_NAME = "VMS zabbix agent"
 DESCRIPTION = "Sends metrics on the VMS software of the monitored turbines to Zabbix"
+
+# The tray application starts with every user session; registering it belongs to the
+# registration of the agent, so the operator sets up nothing by hand.
+TRAY_COMMAND = "zabbixvms-tray"
+TRAY_RUN_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+TRAY_RUN_VALUE = "ZabbixVmsTray"
 
 # Everyone on the machine, which is what "a user without administrator rights" means.
 USERS_SID = win32security.CreateWellKnownSid(win32security.WinBuiltinUsersSid)
@@ -113,8 +123,46 @@ def grant_user_control(service_name: str = SERVICE_NAME) -> None:
         win32service.CloseServiceHandle(manager)
 
 
+def tray_executable() -> str:
+    """Path of the tray application's executable installed beside this one."""
+    beside = Path(sys.executable).parent / f"{TRAY_COMMAND}.exe"
+    if beside.exists():
+        return str(beside)
+    found = shutil.which(TRAY_COMMAND)
+    if found is None:
+        raise FileNotFoundError(
+            f"{TRAY_COMMAND} was not found; is the package installed?")
+    return found
+
+
+def register_tray_autostart() -> None:
+    """Start the tray application for every user who logs on to the machine."""
+    key = win32api.RegCreateKey(win32con.HKEY_LOCAL_MACHINE, TRAY_RUN_KEY)
+    try:
+        win32api.RegSetValueEx(key, TRAY_RUN_VALUE, 0, win32con.REG_SZ,
+                               f'"{tray_executable()}"')
+    finally:
+        win32api.RegCloseKey(key)
+
+
+def unregister_tray_autostart() -> None:
+    """Take the tray application out of the automatic start again."""
+    try:
+        key = win32api.RegOpenKeyEx(win32con.HKEY_LOCAL_MACHINE, TRAY_RUN_KEY, 0,
+                                    win32con.KEY_SET_VALUE)
+    except win32api.error:
+        return
+    try:
+        win32api.RegDeleteValue(key, TRAY_RUN_VALUE)
+    except win32api.error:
+        # Nothing registered; unregistering twice is not an error.
+        pass
+    finally:
+        win32api.RegCloseKey(key)
+
+
 def install() -> None:
-    """Register the service: automatic start and control for ordinary users."""
+    """Register the service: automatic start, control for ordinary users, tray."""
     win32serviceutil.InstallService(
         pythonClassString=f"{ZabbixVmsService.__module__}.{ZabbixVmsService.__name__}",
         serviceName=SERVICE_NAME,
@@ -123,10 +171,12 @@ def install() -> None:
         startType=win32service.SERVICE_AUTO_START,
     )
     grant_user_control()
+    register_tray_autostart()
 
 
 def remove() -> None:
-    """Unregister the service."""
+    """Unregister the service and stop starting the tray application."""
+    unregister_tray_autostart()
     win32serviceutil.RemoveService(SERVICE_NAME)
 
 

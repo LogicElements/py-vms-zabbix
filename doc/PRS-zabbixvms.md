@@ -180,7 +180,7 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 ### UC2-R8
 **Popis:** Konfiguraci lze otevřít k editaci z kontextového menu ikony v systray.
 **DoD:**
-- Kontextové menu ikony obsahuje položku Open configuration.
+- Kontextové menu ikony obsahuje položku Otevřít konfiguraci.
 - Volbou této položky se aktivní konfigurační soubor z `ProgramData` otevře v textovém editoru, který má systém přiřazený k souborům `.json`.
 - Po uložení změn a restartu služby agent pracuje podle nových hodnot.
 - Editace konfigurace nevyžaduje oprávnění administrátora.

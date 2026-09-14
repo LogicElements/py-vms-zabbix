@@ -141,6 +141,31 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Open configuration.
 9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
 
+**Stav:** kroky 1 až 8 jsou hotové, krok 9 zbývá – potřebuje přihlášené sezení s desktopem.
+Do jeho dokončení zůstávají UC1-R5, UC1-R6, UC1-R8 a UC2-R8 ve stavu Zbývá.
+
+Podle dohody jsou položky menu česky (Spustit, Zastavit, Restartovat, Otevřít konfiguraci),
+barvy jsou dvě (zelená běží, červená neběží, a to včetně stavu, kdy služba není nainstalovaná)
+a automatické spuštění se zapisuje do `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
+pod hodnotou `ZabbixVmsTray` při `zabbixvms-service install`; `remove` ji zase smaže.
+
+Postup ručního ověření:
+
+```
+zabbixvms-service install
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v ZabbixVmsTray
+zabbixvms-tray                  # nebo se odhlásit a znovu přihlásit (UC1-R8)
+sc.exe stop ZabbixVms           # ikona zčervená do 5 s (UC1-R5)
+sc.exe start ZabbixVms          # ikona zezelená do 5 s
+```
+
+Z kontextového menu ikony vyzkoušet Spustit, Zastavit a Restartovat a výsledek ověřit
+příkazem `sc.exe query ZabbixVms` (UC1-R6); položka Otevřít konfiguraci musí otevřít
+`C:\ProgramData\LogicElements\ZabbixVms\config.json` v editoru přiřazeném k `.json`
+a nesmí vyvolat výzvu UAC (UC2-R8). Pro UC1-R8 restartovat server a po přihlášení
+zkontrolovat, že ikona je v systray. Po `zabbixvms-service remove` už hodnota
+`ZabbixVmsTray` v registru být nesmí.
+
 ### Etapa 6 – Logování a vlastní stav agenta
 **Účel:** Zaznamenat chyby do logu a Event Logu a odeslat stav agenta do Zabbixu.
 **Řeší:** UC5-R1, UC5-R2, UC5-R3
