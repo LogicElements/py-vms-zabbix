@@ -17,18 +17,18 @@
 | UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Hotovo | tests/test_config.py |
 | UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá | |
 | UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Zbývá | |
-| UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Zbývá | |
+| UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá | |
-| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá | |
-| UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Zbývá | |
-| UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Zbývá | |
+| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
+| UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
+| UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Hotovo | tests/test_collector.py |
 | UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá | |
-| UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Zbývá | |
-| UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Zbývá | |
-| UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Zbývá | |
-| UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Zbývá | |
-| UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Zbývá | |
+| UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Hotovo | tests/test_collector.py |
+| UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Hotovo | tests/test_collector_db.py |
+| UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
+| UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Hotovo | tests/test_collector.py |
+| UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá | |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Zbývá | |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Zbývá | |

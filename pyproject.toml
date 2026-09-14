@@ -51,6 +51,7 @@ zabbixvms = ["data/*.json", "data/*.yaml"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["db: needs the BVMS test database, skipped when it is not reachable"]
 
 [project.urls]
 "Homepage" = "https://github.com/LogicElements/py-vms-zabbix"

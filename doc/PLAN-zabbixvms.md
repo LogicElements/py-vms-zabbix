@@ -20,7 +20,7 @@
 | # | Název | Hotovo |
 | --- | --- | --- |
 | 1 | Kostra balíčku a konfigurace | [x] |
-| 2 | Katalog metrik a sběr z databáze | [ ] |
+| 2 | Katalog metrik a sběr z databáze | [x] |
 | 3 | Odesílání a smyčka agenta | [ ] |
 | 4 | Služba Windows | [ ] |
 | 5 | Tray aplikace | [ ] |
@@ -42,9 +42,9 @@ Kroky jsou rozepsané pro etapy 1 až 3; u etap 4 až 7 se doplní, až na ně p
 7. Implementovat kontrolu rozsahů: 1 až 4 turbíny, 0 až 2 buffery u turbíny.
 8. Napsat testy: uložení a načtení konfigurace se shodnými hodnotami, nasazení výchozí konfigurace do prázdné složky, ponechání existujícího souboru beze změny, odmítnutí konfigurace mimo povolené rozsahy.
 
-**Poznámka k dokončení:** UC2-R4 a UC2-R6 zůstávají ve stavu Zbývá – jejich kód je hotový
-(agent konfiguraci nepřepisuje, skupina parametrů databáze je nastavená), ale jejich DoD
-se ověří až proti běžící službě (etapa 4) a proti čtení z databáze (etapa 2).
+**Poznámka k dokončení:** UC2-R6 přešel na Hotovo až v etapě 2, kdy se z nastavené databáze
+opravdu čte. UC2-R4 zůstává ve stavu Zbývá – jeho kód je hotový (agent konfiguraci
+nepřepisuje), ale DoD se ověří až proti běžící službě v etapě 4.
 
 ### Etapa 2 – Katalog metrik a sběr z databáze
 **Účel:** Definovat sadu metrik a naplnit ji hodnotami z databáze `BVMS`.
@@ -58,6 +58,10 @@ se ověří až proti běžící službě (etapa 4) a proti čtení z databáze 
 6. Implementovat nulové hodnoty metrik u bufferu, který turbína nemá nastavený.
 7. Napsat testy proti podvrženým objektům: výpočet otáček, výpočet stáří, mez -1, nuly u nenastaveného bufferu, shoda odeslaných klíčů s katalogem `METRICS`.
 8. Napsat testy proti testovací databázi: přečtení řádku podle `SystemId`, přečtení počtů řádků bufferů, nezávislost hodnot na pořadí sloupců informační tabulky.
+
+**Poznámka k dokončení:** databázové testy jsou označené značkou `db` a když databáze `BVMS`
+není dostupná, přeskočí se (`pytest -m db` je spustí samostatně). Metriky `vms.agent_status`
+a `vms.agent_error` collector neplní, pocházejí z vlastního stavu agenta (etapa 6).
 
 ### Etapa 3 – Odesílání a smyčka agenta
 **Účel:** Odeslat spočítané hodnoty do Zabbixu a rozběhnout opakovaný cyklus.
