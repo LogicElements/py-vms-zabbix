@@ -22,7 +22,7 @@
 | 1 | Kostra balíčku a konfigurace | [x] |
 | 2 | Katalog metrik a sběr z databáze | [x] |
 | 3 | Odesílání a smyčka agenta | [x] |
-| 4 | Služba Windows | [ ] |
+| 4 | Služba Windows | [x] |
 | 5 | Tray aplikace | [ ] |
 | 6 | Logování a vlastní stav agenta | [ ] |
 | 7 | Šablona pro Zabbix a návod | [ ] |
@@ -90,8 +90,13 @@ se neověřovalo, aby do něj nešla testovací data.
 6. Napsat testy proti podvrženému agentovi: `SvcDoRun` spustí smyčku, `SvcStop` ji ukončí, sestavení deskriptoru zabezpečení z požadovaných práv.
 7. Ručně ověřit: `sc.exe query ZabbixVms` po registraci, start a stop, stav RUNNING po restartu serveru bez přihlášení, ovládání pod účtem bez práv administrátora, běh služby při nedostupné MySQL a konfigurační soubor beze změny po startu a zastavení.
 
-**Stav:** kroky 1 až 6 jsou hotové, krok 7 zbývá – vyžaduje práva administrátora. Do jeho
-dokončení zůstávají UC1-R2, UC1-R3, UC1-R4, UC1-R7 a UC2-R4 ve stavu Zbývá.
+**Stav:** hotovo. Ruční ověření kroku 7 proběhlo, včetně registrace a odebrání služby, takže
+UC1-R2, UC1-R3, UC1-R4, UC1-R7 i UC2-R4 přešly na Hotovo.
+
+Dvě věci, na které se při ověřování narazilo a stojí za zapamatování: `sc.exe delete` se ze
+správce služeb projeví až po zavření posledního handlu na službu, takže při otevřené konzoli
+Služby zůstane služba v mezistavu (`DeleteFlag=1`) a `install` pak selže s chybou 1072. A při
+per-user instalaci Pythonu nenastartuje hostitel služby, viz předpoklad níže.
 
 Předpoklad: Python nainstalovaný pro celý stroj, viz [README](../README.md#instalace). Při
 instalaci jen pro uživatele služba nenastartuje a `sc.exe start` skončí chybou 1053, protože
