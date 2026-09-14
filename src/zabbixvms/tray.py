@@ -53,6 +53,19 @@ MENU = (
 WM_TRAYICON = win32con.WM_USER + 20
 TIMER_ID = 1
 
+# Ukončit sits right under the other items, so it is asked about before it acts.
+QUIT_QUESTION = ("Opravdu ukončit ikonu agenta?\n\n"
+                 "Služba poběží dál, jen zmizí ikona a ovládání z ní.")
+
+
+def ask_to_quit(question: str = QUIT_QUESTION, title: str = DISPLAY_NAME) -> bool:
+    """Ask the user to confirm; No is the preselected answer."""
+    answer = win32gui.MessageBox(
+        0, question, title,
+        win32con.MB_YESNO | win32con.MB_ICONQUESTION | win32con.MB_DEFBUTTON2
+        | win32con.MB_SETFOREGROUND)
+    return answer == win32con.IDYES
+
 
 def icon_color(state) -> tuple[int, int, int]:
     """Colour of the icon for a state of the service.
@@ -69,10 +82,11 @@ class TrayApp:
     """The logic behind the icon: what colour it has and what the menu does."""
 
     def __init__(self, controller: ServiceController | None = None, icon=None,
-                 open_file=os.startfile) -> None:
+                 open_file=os.startfile, confirm_quit=ask_to_quit) -> None:
         self._controller = controller if controller is not None else ServiceController()
         self._icon = icon
         self._open_file = open_file
+        self._confirm_quit = confirm_quit
         self._state = _UNKNOWN
 
     @property
@@ -109,7 +123,12 @@ class TrayApp:
         self._open_file(str(config_path()))
 
     def quit(self) -> None:
-        """End the tray application; the service itself keeps running."""
+        """End the tray application, but ask first so a misclick costs nothing.
+
+        The service itself keeps running either way.
+        """
+        if not self._confirm_quit():
+            return
         if self._icon is not None:
             self._icon.quit()
 

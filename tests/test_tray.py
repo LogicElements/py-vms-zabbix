@@ -53,11 +53,12 @@ class FakeIcon:
         self.quits += 1
 
 
-def make_app(state=win32service.SERVICE_STOPPED):
+def make_app(state=win32service.SERVICE_STOPPED, confirm=True):
     controller = FakeController(state)
     icon = FakeIcon()
     opened = []
-    app = TrayApp(controller=controller, icon=icon, open_file=opened.append)
+    app = TrayApp(controller=controller, icon=icon, open_file=opened.append,
+                  confirm_quit=lambda: confirm)
     return app, controller, icon, opened
 
 
@@ -161,13 +162,66 @@ def test_configuration_item_opens_the_active_configuration():
     assert opened == [str(config_path())]
 
 
-def test_quit_item_ends_the_tray():
+def test_quit_item_ends_the_tray_once_confirmed():
     """Ukončit lets the message loop finish, so the icon can be taken away."""
-    app, _, icon, _ = make_app()
+    app, _, icon, _ = make_app(confirm=True)
 
     app.invoke(4)
 
     assert icon.quits == 1
+
+
+def test_quit_is_asked_about_first():
+    """A misclick on Ukončit costs nothing: without a yes the tray stays."""
+    app, _, icon, _ = make_app(confirm=False)
+
+    app.invoke(4)
+
+    assert icon.quits == 0
+
+
+def test_declined_quit_leaves_everything_running():
+    app, controller, icon, _ = make_app(win32service.SERVICE_RUNNING, confirm=False)
+    app.poll()
+
+    app.invoke(4)
+
+    assert icon.quits == 0
+    assert controller.calls == []
+
+
+def test_the_question_says_the_service_keeps_running():
+    """The question must not leave the impression that the service stops too."""
+    assert "Služba poběží dál" in tray_module.QUIT_QUESTION
+
+
+def test_question_offers_yes_and_no_with_no_preselected(monkeypatch):
+    """A stray Enter on the question must not end the tray."""
+    import win32con
+
+    captured = {}
+
+    def fake_message_box(parent, text, title, flags):
+        captured.update(text=text, title=title, flags=flags)
+        return win32con.IDNO
+
+    monkeypatch.setattr(tray_module.win32gui, "MessageBox", fake_message_box)
+
+    answered = tray_module.ask_to_quit()
+
+    assert answered is False
+    assert captured["flags"] & win32con.MB_YESNO
+    assert captured["flags"] & win32con.MB_DEFBUTTON2
+    assert captured["title"] == tray_module.DISPLAY_NAME
+
+
+def test_only_yes_ends_the_tray(monkeypatch):
+    import win32con
+
+    monkeypatch.setattr(tray_module.win32gui, "MessageBox",
+                        lambda *args: win32con.IDYES)
+
+    assert tray_module.ask_to_quit() is True
 
 
 def test_quit_leaves_the_service_alone():
@@ -181,7 +235,8 @@ def test_quit_leaves_the_service_alone():
 
 def test_quit_without_an_icon_is_harmless():
     """quit() before the icon exists must not fail."""
-    TrayApp(controller=FakeController(), open_file=lambda path: None).quit()
+    TrayApp(controller=FakeController(), open_file=lambda path: None,
+            confirm_quit=lambda: True).quit()
 
 
 def test_every_menu_item_has_an_action():
