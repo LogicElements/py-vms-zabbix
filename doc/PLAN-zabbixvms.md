@@ -93,6 +93,10 @@ se neověřovalo, aby do něj nešla testovací data.
 **Stav:** kroky 1 až 6 jsou hotové, krok 7 zbývá – vyžaduje práva administrátora. Do jeho
 dokončení zůstávají UC1-R2, UC1-R3, UC1-R4, UC1-R7 a UC2-R4 ve stavu Zbývá.
 
+Předpoklad: Python nainstalovaný pro celý stroj, viz [README](../README.md#instalace). Při
+instalaci jen pro uživatele služba nenastartuje a `sc.exe start` skončí chybou 1053, protože
+hostitel `pythonservice.exe` nenajde `python3XX.dll` na cestě účtu LocalSystem.
+
 Postup ručního ověření, v prostředí s nainstalovaným balíčkem (`pip install .`) a
 z příkazové řádky spuštěné jako administrátor. Píše se `sc.exe`, ne `sc` – v PowerShellu
 je `sc` alias pro `Set-Content`, takže samotné `sc` správce služeb nespustí:

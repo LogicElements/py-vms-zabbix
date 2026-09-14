@@ -20,6 +20,12 @@ pip install -e .
 
 Běží pouze na Windows (pro integraci s Windows Service se používá `pywin32`).
 
+Python musí být na serveru nainstalovaný **pro celý stroj** (volba „for all users"), ne jen
+pro přihlášeného uživatele. Služba běží pod účtem LocalSystem a hostitelský proces
+`pythonservice.exe` potřebuje najít `python3XX.dll`. U instalace jen pro uživatele leží tahle
+knihovna v `%LOCALAPPDATA%`, LocalSystem ji na své cestě nemá a služba pak nenastartuje –
+ohlásí se jen chyba 1053, protože proces skončí dřív, než stihne odpovědět správci služeb.
+
 ## Použití
 
 Instalace vytvoří dva vstupní body:
