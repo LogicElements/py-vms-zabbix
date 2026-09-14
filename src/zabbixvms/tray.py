@@ -8,7 +8,9 @@ users at registration are enough.
 
 from __future__ import annotations
 
+import ctypes
 import os
+from ctypes import wintypes
 
 import win32api
 import win32con
@@ -19,6 +21,16 @@ import win32ui
 from zabbixvms.config import config_path
 from zabbixvms.service import DISPLAY_NAME
 from zabbixvms.servicecontrol import ServiceController
+
+# This build of pywin32 exposes neither SetTimer nor KillTimer, so they are taken
+# from user32 directly. The argument types are spelled out, otherwise the window
+# handle is truncated on 64 bit.
+_user32 = ctypes.windll.user32
+_user32.SetTimer.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.UINT,
+                             ctypes.c_void_p]
+_user32.SetTimer.restype = ctypes.c_void_p
+_user32.KillTimer.argtypes = [wintypes.HWND, ctypes.c_void_p]
+_user32.KillTimer.restype = wintypes.BOOL
 
 # How often the state of the service is asked for, in seconds.
 POLL_INTERVAL = 5
@@ -142,10 +154,12 @@ class TrayIcon:
         self._tooltip = tooltip
         self._app = app
         self._icon_handle = None
+        self._atom = None
+        self._instance = win32api.GetModuleHandle(None)
         self._window = self._create_window()
         win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, self._notify_data(
             solid_icon(STOPPED_COLOR)))
-        win32gui.SetTimer(self._window, TIMER_ID, POLL_INTERVAL * 1000, None)
+        _user32.SetTimer(self._window, TIMER_ID, POLL_INTERVAL * 1000, None)
 
     def set_color(self, color: tuple[int, int, int]) -> None:
         """Repaint the icon in the given colour."""
@@ -153,8 +167,17 @@ class TrayIcon:
                                   self._notify_data(solid_icon(color)))
 
     def remove(self) -> None:
-        """Take the icon out of the systray."""
+        """Take the icon out of the systray and give up the window behind it.
+
+        The window class is unregistered too, otherwise a second icon in the same
+        process would fail to register it again.
+        """
+        _user32.KillTimer(self._window, TIMER_ID)
         win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (self._window, 0))
+        win32gui.DestroyWindow(self._window)
+        if self._atom is not None:
+            win32gui.UnregisterClass(self._atom, self._instance)
+            self._atom = None
 
     def pump(self) -> None:
         win32gui.PumpMessages()
@@ -167,7 +190,7 @@ class TrayIcon:
 
     def _create_window(self):
         window_class = win32gui.WNDCLASS()
-        window_class.hInstance = win32api.GetModuleHandle(None)
+        window_class.hInstance = self._instance
         window_class.lpszClassName = "ZabbixVmsTray"
         window_class.lpfnWndProc = {
             win32con.WM_COMMAND: self._on_command,
@@ -175,9 +198,9 @@ class TrayIcon:
             win32con.WM_DESTROY: self._on_destroy,
             WM_TRAYICON: self._on_tray,
         }
-        atom = win32gui.RegisterClass(window_class)
-        return win32gui.CreateWindow(atom, self._tooltip, win32con.WS_OVERLAPPED,
-                                     0, 0, 0, 0, 0, 0, window_class.hInstance, None)
+        self._atom = win32gui.RegisterClass(window_class)
+        return win32gui.CreateWindow(self._atom, self._tooltip, win32con.WS_OVERLAPPED,
+                                     0, 0, 0, 0, 0, 0, self._instance, None)
 
     def _on_timer(self, window, message, wparam, lparam):
         self._app.poll()

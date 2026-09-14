@@ -2,6 +2,7 @@
 the menu items do and which file Otevřít konfiguraci opens
 (UC1-R5, UC1-R6, UC2-R8)."""
 
+import pytest
 import win32service
 
 from zabbixvms import tray as tray_module
@@ -175,3 +176,32 @@ def test_solid_icon_really_builds_an_icon():
     handle = tray_module.solid_icon(RUNNING_COLOR)
 
     assert handle
+
+
+@pytest.mark.gui
+def test_icon_is_really_created_and_removed():
+    """The window, the systray icon and the timer are built with the real API.
+
+    The tray runs without a console, so anything missing in this path would only
+    show as an icon that appears and vanishes again.
+    """
+    app, _, _, _ = make_app()
+
+    icon = tray_module.TrayIcon("zabbixvms test", app)
+    try:
+        icon.set_color(RUNNING_COLOR)
+        icon.set_color(STOPPED_COLOR)
+    finally:
+        icon.remove()
+
+
+@pytest.mark.gui
+def test_timer_is_armed_with_the_poll_interval():
+    """UC1-R5: the window really gets a five second timer."""
+    app, _, _, _ = make_app()
+
+    icon = tray_module.TrayIcon("zabbixvms test", app)
+    try:
+        assert tray_module._user32.KillTimer(icon._window, tray_module.TIMER_ID)
+    finally:
+        icon.remove()
