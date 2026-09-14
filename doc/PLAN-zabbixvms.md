@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | 1 | Kostra balíčku a konfigurace | [x] |
 | 2 | Katalog metrik a sběr z databáze | [x] |
-| 3 | Odesílání a smyčka agenta | [ ] |
+| 3 | Odesílání a smyčka agenta | [x] |
 | 4 | Služba Windows | [ ] |
 | 5 | Tray aplikace | [ ] |
 | 6 | Logování a vlastní stav agenta | [ ] |
@@ -73,6 +73,11 @@ a `vms.agent_error` collector neplní, pocházejí z vlastního stavu agenta (et
 4. Vytvořit `agent.py` s třídou `Agent`: cyklus přes turbíny z konfigurace, odeslání hodnot, prodleva 5 sekund.
 5. Ošetřit výjimky jednoho cyklu tak, aby smyčka pokračovala dalším cyklem.
 6. Napsat testy proti podvrženým objektům: složení názvu hostu, odeslání na adresu a port z konfigurace, pokračování smyčky po výjimce v cyklu, prodleva mezi cykly.
+
+**Poznámka k dokončení:** UC1-R4 zůstává ve stavu Zbývá – smyčka chybu cyklu přežije a je to
+otestované, ale DoD mluví o stavu služby RUNNING, což jde ověřit až v etapě 4. Po chybě cyklu
+se zahodí databázové spojení, takže další cyklus navazuje na čerstvé. Odeslání na živý Zabbix
+se neověřovalo, aby do něj nešla testovací data.
 
 ### Etapa 4 – Služba Windows
 **Účel:** Zaregistrovat agenta jako službu, která startuje se systémem a jde ovládat i bez práv administrátora.

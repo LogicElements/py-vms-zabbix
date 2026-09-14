@@ -79,6 +79,11 @@ class Collector:
             password=self._database.password,
         )
 
+    @property
+    def is_connected(self) -> bool:
+        """Whether the collector currently holds a connection to MySQL."""
+        return self._connection is not None
+
     def close(self) -> None:
         """Close the connection; closing a collector that is not connected is fine."""
         if self._connection is not None:

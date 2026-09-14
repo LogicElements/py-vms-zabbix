@@ -13,10 +13,10 @@
 | UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Zbývá | |
 | UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá | |
 | UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Hotovo | tests/test_config.py |
-| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Zbývá | |
+| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Hotovo | tests/test_sender.py |
 | UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Hotovo | tests/test_config.py |
 | UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Zbývá | |
-| UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Zbývá | |
+| UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Hotovo | tests/test_sender.py |
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá | |
@@ -29,7 +29,7 @@
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
 | UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Hotovo | tests/test_collector.py |
 | UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Hotovo | tests/test_collector.py |
-| UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá | |
+| UC4-R6 | Prodleva 5 sekund mezi cykly měření | Hotovo | tests/test_agent.py |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Zbývá | |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Zbývá | |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Zbývá | |
