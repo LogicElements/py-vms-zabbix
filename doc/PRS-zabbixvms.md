@@ -8,8 +8,8 @@
 | UC1-R2 | Registrace a ovládání jako služba Windows `ZabbixVms` | Hotovo | tests/test_service.py |
 | UC1-R3 | Automatický start se systémem bez přihlášení uživatele | Hotovo | N/A |
 | UC1-R4 | Nepřetržitý běh, chyba jednoho cyklu službu neukončí | Hotovo | tests/test_agent.py |
-| UC1-R5 | Ikona v systray signalizující barvou stav služby | Zbývá | |
-| UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Zbývá | |
+| UC1-R5 | Ikona v systray signalizující barvou stav služby | Hotovo | tests/test_tray.py |
+| UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Hotovo | tests/test_tray.py |
 | UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Hotovo | tests/test_service.py |
 | UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá | |
 | UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Hotovo | tests/test_config.py |
