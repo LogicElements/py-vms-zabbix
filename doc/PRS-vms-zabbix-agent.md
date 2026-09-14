@@ -27,7 +27,7 @@
 | UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Zbývá | |
 | UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Zbývá | |
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Zbývá | |
-| UC4-R4 | Stáří počítané v celých sekundách proti času měření | Zbývá | |
+| UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Zbývá | |
 | UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Zbývá | |
 | UC4-R6 | Prodleva 5 sekund mezi cykly měření | Zbývá | |
 
@@ -194,13 +194,13 @@ Sada metrik odesílaných do Zabbixu:
 | Klíč | Název | Typ hodnoty | Jednotka | Popis |
 | --- | --- | --- | --- | --- |
 | `vms.speed` | Otáčky turbíny | Numeric (float) | rpm | Aktuální otáčky turbíny |
-| `vms.info_age` | Stáří info záznamu | Numeric (unsigned) | s | Doba od poslední aktualizace tabulky `info` |
-| `vms.timestamp_age` | Stáří timestamp dat | Numeric (unsigned) | s | Doba od posledních přijatých timestamp dat |
-| `vms.config_age` | Stáří konfiguračních dat | Numeric (unsigned) | s | Doba od posledních přijatých konfiguračních dat |
+| `vms.info_age` | Stáří info záznamu | Numeric (float) | s | Doba od poslední aktualizace tabulky `info`. Hodnota -1 znamená, že údaj není k dispozici. |
+| `vms.timestamp_age` | Stáří timestamp dat | Numeric (float) | s | Doba od posledních přijatých timestamp dat. Hodnota -1 znamená, že údaj není k dispozici. |
+| `vms.config_age` | Stáří konfiguračních dat | Numeric (float) | s | Doba od posledních přijatých konfiguračních dat. Hodnota -1 znamená, že údaj není k dispozici. |
 | `vms.buf_rows_1` | Počet řádků v bufferu 1 | Numeric (unsigned) | | Počet řádků v první bufferové tabulce |
 | `vms.buf_rows_2` | Počet řádků v bufferu 2 | Numeric (unsigned) | | Počet řádků v druhé bufferové tabulce |
-| `vms.buf_age_1` | Stáří bufferu 1 | Numeric (unsigned) | s | Doba od posledních dat přijatých do bufferu 1 |
-| `vms.buf_age_2` | Stáří bufferu 2 | Numeric (unsigned) | s | Doba od posledních dat přijatých do bufferu 2 |
+| `vms.buf_age_1` | Stáří bufferu 1 | Numeric (float) | s | Doba od posledních dat přijatých do bufferu 1. Hodnota -1 znamená, že údaj není k dispozici. |
+| `vms.buf_age_2` | Stáří bufferu 2 | Numeric (float) | s | Doba od posledních dat přijatých do bufferu 2. Hodnota -1 znamená, že údaj není k dispozici. |
 | `vms.buf_bulk_1` | Doba bulk zápisu 1 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 1 |
 | `vms.buf_bulk_2` | Doba bulk zápisu 2 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 2 |
 
@@ -279,9 +279,10 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 - Přidání sloupce do informační tabulky ani změna jejich pořadí nezmění hodnoty odeslaných metrik.
 
 ### UC4-R4
-**Popis:** Metriky stáří jsou počtem celých sekund mezi zdrojovým datem a časem měření.
+**Popis:** Metriky stáří jsou počtem celých sekund mezi zdrojovým datem a časem měření; nesmyslně velké stáří se hlásí jako nedostupný údaj.
 **DoD:**
 - Hodnota metriky `*_age` je počet celých sekund mezi hodnotou zdrojového sloupce a časem měření daného cyklu.
+- Přesáhne-li vypočtené stáří 5 let (1825 dní), odešle se místo něj hodnota -1 jako příznak nedostupného údaje.
 - Všechny metriky jedné turbíny v jednom cyklu se počítají proti témuž času měření.
 
 ### UC4-R5
