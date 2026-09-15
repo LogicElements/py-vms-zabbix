@@ -228,3 +228,16 @@ v `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`.
 5. Napsat testy: klíče položek šablony odpovídají `METRICS` bez přebytků a bez chybějících, každá položka je typu trapper a má typ hodnoty i jednotku podle katalogu, šablona je platný YAML s value map a třemi triggery.
 6. Sepsat `doc/NAVOD-zabbix.md` se třemi kroky: založení hostu `<location>_<název turbíny>`, import šablony z balíčku a přiřazení šablony hostu.
 7. Doplnit odkaz na návod do rozcestníku v `README.md`.
+
+**Stav:** kroky 1 až 7 jsou hotové, zbývá naimportovat šablonu do Zabbixu. Do té doby
+zůstávají UC3-R4 a UC5-R4 ve stavu Zbývá – obě DoD stojí na tom, že se soubor naimportuje
+bez ruční úpravy, a to jde ověřit jen proti skutečnému serveru.
+
+Export je ve formátu **Zabbix 6.0**, protože novější servery umí naimportovat i starší
+formát. Kdyby ho server odmítl, stačí změnit `EXPORT_VERSION` v `template.py`, přegenerovat
+soubor a upravit test. Uuid objektů se odvozují z pevného jmenného prostoru, takže jsou při
+každém generování stejné a opakovaný import šablonu aktualizuje místo zakládání druhé.
+
+Ověření: naimportovat `src/zabbixvms/data/zabbix_template.yaml` podle
+[návodu](NAVOD-zabbix.md) a zkontrolovat, že u hosta vzniklo dvanáct položek typu Zabbix
+trapper, value map u `vms.agent_status` a tři triggery.

@@ -11,6 +11,7 @@ Balíček vznikl vyčleněním z projektu [`pyvms`](https://github.com/LogicElem
 - [PRS-zabbixvms.md](doc/PRS-zabbixvms.md) – Product Requirement Specification: účel projektu, use cases a requirementy.
 - [PLAN-zabbixvms.md](doc/PLAN-zabbixvms.md) – plán: rozpad requirementů do etap.
 - [NAVRH-zabbixvms.md](doc/NAVRH-zabbixvms.md) – návrh struktury balíčku: jména, členění modulů a odpovědnosti.
+- [NAVOD-zabbix.md](doc/NAVOD-zabbix.md) – návod k nastavení Zabbixu: založení hostů, import šablony a její přiřazení.
 
 ## Instalace
 

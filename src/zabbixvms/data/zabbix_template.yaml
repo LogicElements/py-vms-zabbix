@@ -1,0 +1,122 @@
+zabbix_export:
+  version: '6.0'
+  groups:
+  - uuid: 45dada3be53d523f8ec10455691a33b2
+    name: Templates/Applications
+  templates:
+  - uuid: f37074f8414e57f2a93850ad6d940053
+    template: VMS zabbix agent
+    name: VMS zabbix agent
+    description: Metriky softwaru VMS odesílané agentem zabbixvms.
+    groups:
+    - name: Templates/Applications
+    items:
+    - uuid: a025056c313c5c37b008560e98b5a399
+      name: Otáčky turbíny
+      type: TRAP
+      key: vms.speed
+      value_type: FLOAT
+      description: Aktuální otáčky turbíny
+      units: rpm
+    - uuid: 3a84f34e1bf453d2a5db342cb44d793a
+      name: Stáří info záznamu
+      type: TRAP
+      key: vms.info_age
+      value_type: FLOAT
+      description: Doba od poslední aktualizace tabulky `info`. Hodnota -1 znamená, že údaj není k dispozici.
+      units: s
+    - uuid: b5af6061c19c5011843ad8aa3f7b2415
+      name: Stáří timestamp dat
+      type: TRAP
+      key: vms.timestamp_age
+      value_type: FLOAT
+      description: Doba od posledních přijatých timestamp dat. Hodnota -1 znamená, že údaj není k dispozici.
+      units: s
+    - uuid: 1c725e79f2cb508a9031ba9d6a77bd06
+      name: Stáří konfiguračních dat
+      type: TRAP
+      key: vms.config_age
+      value_type: FLOAT
+      description: Doba od posledních přijatých konfiguračních dat. Hodnota -1 znamená, že údaj není k
+        dispozici.
+      units: s
+    - uuid: 1be3a968357b52bfad694d2885f54863
+      name: Počet řádků v bufferu 1
+      type: TRAP
+      key: vms.buf_rows_1
+      value_type: UNSIGNED
+      description: Počet řádků v první bufferové tabulce
+    - uuid: 9a63f827e6a855549fee118f385b2dfc
+      name: Počet řádků v bufferu 2
+      type: TRAP
+      key: vms.buf_rows_2
+      value_type: UNSIGNED
+      description: Počet řádků v druhé bufferové tabulce
+    - uuid: 4ef48f4ba2865fbeb5a94c664e8220de
+      name: Stáří bufferu 1
+      type: TRAP
+      key: vms.buf_age_1
+      value_type: FLOAT
+      description: Doba od posledních dat přijatých do bufferu 1. Hodnota -1 znamená, že údaj není k dispozici.
+      units: s
+    - uuid: 00dbc7d424f057faaacef40d83cd2e4f
+      name: Stáří bufferu 2
+      type: TRAP
+      key: vms.buf_age_2
+      value_type: FLOAT
+      description: Doba od posledních dat přijatých do bufferu 2. Hodnota -1 znamená, že údaj není k dispozici.
+      units: s
+    - uuid: 56ebce1768865dd2996bc10b4f878b2b
+      name: Doba bulk zápisu 1
+      type: TRAP
+      key: vms.buf_bulk_1
+      value_type: UNSIGNED
+      description: Doba zápisu bulk příkazu do databáze pro buffer 1
+      units: ms
+    - uuid: d4506d28a9ab5d75bf883564ed4e7229
+      name: Doba bulk zápisu 2
+      type: TRAP
+      key: vms.buf_bulk_2
+      value_type: UNSIGNED
+      description: Doba zápisu bulk příkazu do databáze pro buffer 2
+      units: ms
+    - uuid: aceaa39a77be57c5acfe687fdc0cfdef
+      name: Stav agenta
+      type: TRAP
+      key: vms.agent_status
+      value_type: UNSIGNED
+      description: 0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`.
+      valuemap:
+        name: Stav agenta
+    - uuid: 2a536152869e52d39c0b77a952ca8b84
+      name: Poslední chyba agenta
+      type: TRAP
+      key: vms.agent_error
+      value_type: CHAR
+      description: Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku.
+    valuemaps:
+    - uuid: 7508a404e6db527c9cb2fcaca34c537c
+      name: Stav agenta
+      mappings:
+      - value: '0'
+        newvalue: Bez chyby
+      - value: '1'
+        newvalue: Varování
+      - value: '2'
+        newvalue: Chyba
+    triggers:
+    - uuid: afe7934c6993506eb5c743e73124c96c
+      expression: last(/VMS zabbix agent/vms.agent_status)>0
+      name: Agent hlásí chybu nebo varování
+      priority: WARNING
+      description: Stav agenta je jiný než 0; popis nese vms.agent_error.
+    - uuid: aaf8fe4175d75f9781cf2acf04103a77
+      expression: length(last(/VMS zabbix agent/vms.agent_error))>0
+      name: 'Chyba agenta: {ITEM.VALUE}'
+      priority: WARNING
+      description: Agent hlásí text chyby nebo varování.
+    - uuid: 7a14edbe214156b7b0b4dcc572f869ce
+      expression: nodata(/VMS zabbix agent/vms.agent_status,5m)=1
+      name: Z hostu nepřišla žádná hodnota 5m
+      priority: AVERAGE
+      description: Agent neběží, nebo se nedostane k databázi či k Zabbixu.

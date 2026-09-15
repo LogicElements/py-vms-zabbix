@@ -32,7 +32,7 @@ src/zabbixvms/
     template.py          generátor šablony pro Zabbix z katalogu metrik
     data/
         config_default.json   výchozí konfigurace nasazovaná do ProgramData
-        zabbix_template.yaml  šablona pro import do Zabbixu
+        zabbix_template.yaml  šablona pro import do Zabbixu, generovaná template.py
 ```
 
 ## Odpovědnosti modulů
