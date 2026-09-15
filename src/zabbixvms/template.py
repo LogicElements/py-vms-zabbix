@@ -44,6 +44,11 @@ EXPORT_VALUE_TYPES = {
 STATUS_VALUE_MAP = "Stav agenta"
 STATUS_MAPPINGS = (("0", "Bez chyby"), ("1", "Varování"), ("2", "Chyba"))
 
+# Severity of the triggers. Silence weighs more than a reported error: an agent that
+# says nothing at all may well be an agent that is not running.
+STATE_PRIORITY = "AVERAGE"
+NO_DATA_PRIORITY = "HIGH"
+
 # How long a host may send nothing before it is reported. This also covers the agent
 # not running at all and Zabbix being unreachable, when no metric can be sent.
 NO_DATA_PERIOD = "5m"
@@ -107,14 +112,14 @@ def triggers_of(key: str) -> list[dict]:
                 "uuid": stable_uuid("trigger:status"),
                 "expression": f"last({status})>0",
                 "name": "Agent hlásí chybu nebo varování",
-                "priority": "WARNING",
+                "priority": STATE_PRIORITY,
                 "description": "Stav agenta je jiný než 0; popis nese vms.agent_error.",
             },
             {
                 "uuid": stable_uuid("trigger:nodata"),
                 "expression": f"nodata({status},{NO_DATA_PERIOD})=1",
                 "name": f"Z hostu nepřišla žádná hodnota {NO_DATA_PERIOD}",
-                "priority": "AVERAGE",
+                "priority": NO_DATA_PRIORITY,
                 "description": "Agent neběží, nebo se nedostane k databázi či k Zabbixu.",
             },
         ],
@@ -123,7 +128,7 @@ def triggers_of(key: str) -> list[dict]:
                 "uuid": stable_uuid("trigger:error"),
                 "expression": f"length(last({error}))>0",
                 "name": "Chyba agenta: {ITEM.VALUE}",
-                "priority": "WARNING",
+                "priority": STATE_PRIORITY,
                 "description": "Agent hlásí text chyby nebo varování.",
             },
         ],

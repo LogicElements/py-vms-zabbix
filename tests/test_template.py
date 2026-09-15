@@ -9,6 +9,8 @@ from zabbixvms.template import (
     EXPORT_VALUE_TYPES,
     EXPORT_VERSION,
     NO_DATA_PERIOD,
+    NO_DATA_PRIORITY,
+    STATE_PRIORITY,
     STATUS_MAPPINGS,
     STATUS_VALUE_MAP,
     TEMPLATE_GROUP,
@@ -134,6 +136,16 @@ def test_the_status_item_uses_that_value_map():
 def test_there_are_three_triggers():
     """UC5-R4: the template brings the three triggers, no more."""
     assert len(exported_triggers()) == 3
+
+
+def test_silence_weighs_more_than_a_reported_error():
+    """A host that says nothing may be a host whose agent is not running."""
+    triggers = {t["expression"]: t["priority"] for t in exported_triggers()}
+    no_data = f"nodata(/{TEMPLATE_NAME}/vms.agent_status,{NO_DATA_PERIOD})=1"
+
+    assert triggers.pop(no_data) == NO_DATA_PRIORITY == "HIGH"
+    assert set(triggers.values()) == {STATE_PRIORITY}
+    assert STATE_PRIORITY == "AVERAGE"
 
 
 def test_trigger_on_a_status_above_zero():

@@ -12,6 +12,7 @@ Balíček vznikl vyčleněním z projektu [`pyvms`](https://github.com/LogicElem
 - [PLAN-zabbixvms.md](doc/PLAN-zabbixvms.md) – plán: rozpad requirementů do etap.
 - [NAVRH-zabbixvms.md](doc/NAVRH-zabbixvms.md) – návrh struktury balíčku: jména, členění modulů a odpovědnosti.
 - [NAVOD-zabbix.md](doc/NAVOD-zabbix.md) – návod k nastavení Zabbixu: založení hostů, import šablony a její přiřazení.
+- [CHYBY-agenta.md](doc/CHYBY-agenta.md) – co agent hlásí, kde chyby vznikají a kde k nim hledat podrobnosti.
 
 ## Instalace
 
