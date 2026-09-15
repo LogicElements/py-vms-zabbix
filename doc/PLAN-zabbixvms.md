@@ -251,6 +251,12 @@ Import napoprvé neprošel a stálo to tři kola. Co z toho platí i pro příš
 Struktura exportu se z kódu ověřit nedá, rozhodčím je až import na serveru. Testy proto
 drží alespoň to, co už víme: tvar uuid, umístění triggerů i název sekce skupin.
 
+**Doplněno po dokončení etapy:** triggery se stejně jako metriky vedou jako tabulka v PRS
+a katalog `TRIGGERS` v `metrics.py` je jejím zrcadlem; test tabulku z PRS parsuje a porovnává,
+takže se nemohou rozejít. Přidání dalšího triggeru je tak řádek v tabulce, řádek v katalogu
+a reimport šablony, bez zásahu do generátoru. Sloupec s klíčem metriky zároveň určuje, pod
+kterou položkou trigger v exportu leží.
+
 Export je ve formátu **Zabbix 7.0**, tedy ve verzi serveru, do kterého se importuje. Na jiný
 formát se přejde změnou `EXPORT_VERSION` v `template.py` a přegenerováním souboru; pozor, že
 samotná verze nestačí – Zabbix v 6.4 přejmenoval sekci `groups` na `template_groups`, což

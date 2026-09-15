@@ -44,14 +44,8 @@ EXPORT_VALUE_TYPES = {
 STATUS_VALUE_MAP = "Stav agenta"
 STATUS_MAPPINGS = (("0", "Bez chyby"), ("1", "Varování"), ("2", "Chyba"))
 
-# Severity of the triggers. Silence weighs more than a reported error: an agent that
-# says nothing at all may well be an agent that is not running.
-STATE_PRIORITY = "AVERAGE"
-NO_DATA_PRIORITY = "HIGH"
-
-# How long a host may send nothing before it is reported. This also covers the agent
-# not running at all and Zabbix being unreachable, when no metric can be sent.
-NO_DATA_PERIOD = "5m"
+# Names and severities of the triggers live in the catalog in metrics.py, which
+# mirrors the trigger table of the PRS.
 
 
 def stable_uuid(name: str) -> str:
@@ -98,42 +92,29 @@ def item(metric) -> dict:
     return entry
 
 
+def expression_of(trigger) -> str:
+    """The condition of a trigger with the reference to its metric filled in."""
+    return trigger.condition.replace(metrics.METRIC_PLACEHOLDER,
+                                     f"/{TEMPLATE_NAME}/{trigger.key}")
+
+
 def triggers_of(key: str) -> list[dict]:
-    """Triggers that belong under the item of that key.
+    """Triggers of the catalog that belong under the item of that key.
 
     An export carries a trigger inside the item its expression reads, not beside the
     items; a template with a triggers section of its own is refused on import.
     """
-    status = f"/{TEMPLATE_NAME}/vms.agent_status"
-    error = f"/{TEMPLATE_NAME}/vms.agent_error"
-    by_item = {
-        "vms.agent_status": [
-            {
-                "uuid": stable_uuid("trigger:status"),
-                "expression": f"last({status})>0",
-                "name": "Agent hlásí chybu nebo varování",
-                "priority": STATE_PRIORITY,
-                "description": "Stav agenta je jiný než 0; popis nese vms.agent_error.",
-            },
-            {
-                "uuid": stable_uuid("trigger:nodata"),
-                "expression": f"nodata({status},{NO_DATA_PERIOD})=1",
-                "name": f"Z hostu nepřišla žádná hodnota {NO_DATA_PERIOD}",
-                "priority": NO_DATA_PRIORITY,
-                "description": "Agent neběží, nebo se nedostane k databázi či k Zabbixu.",
-            },
-        ],
-        "vms.agent_error": [
-            {
-                "uuid": stable_uuid("trigger:error"),
-                "expression": f"length(last({error}))>0",
-                "name": "Chyba agenta: {ITEM.VALUE}",
-                "priority": STATE_PRIORITY,
-                "description": "Agent hlásí text chyby nebo varování.",
-            },
-        ],
-    }
-    return by_item.get(key, [])
+    return [
+        {
+            # Derived from what the trigger watches, not from its name, so renaming
+            # one updates it on import instead of leaving the old one behind.
+            "uuid": stable_uuid(f"trigger:{trigger.key}:{trigger.condition}"),
+            "expression": expression_of(trigger),
+            "name": trigger.name,
+            "priority": trigger.priority,
+        }
+        for trigger in metrics.TRIGGERS if trigger.key == key
+    ]
 
 
 def all_triggers() -> list[dict]:

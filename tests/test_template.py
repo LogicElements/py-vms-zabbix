@@ -8,9 +8,6 @@ from zabbixvms.metrics import ValueType
 from zabbixvms.template import (
     EXPORT_VALUE_TYPES,
     EXPORT_VERSION,
-    NO_DATA_PERIOD,
-    NO_DATA_PRIORITY,
-    STATE_PRIORITY,
     STATUS_MAPPINGS,
     STATUS_VALUE_MAP,
     TEMPLATE_GROUP,
@@ -140,12 +137,10 @@ def test_there_are_three_triggers():
 
 def test_silence_weighs_more_than_a_reported_error():
     """A host that says nothing may be a host whose agent is not running."""
-    triggers = {t["expression"]: t["priority"] for t in exported_triggers()}
-    no_data = f"nodata(/{TEMPLATE_NAME}/vms.agent_status,{NO_DATA_PERIOD})=1"
+    priorities = {t["name"]: t["priority"] for t in exported_triggers()}
 
-    assert triggers.pop(no_data) == NO_DATA_PRIORITY == "HIGH"
-    assert set(triggers.values()) == {STATE_PRIORITY}
-    assert STATE_PRIORITY == "AVERAGE"
+    assert priorities["Z hostu nepřišla žádná hodnota 5m"] == "HIGH"
+    assert priorities["Agent hlásí chybu nebo varování"] == "AVERAGE"
 
 
 def test_trigger_on_a_status_above_zero():
@@ -167,8 +162,7 @@ def test_trigger_on_no_data_for_five_minutes():
     """UC5-R4: silence of five minutes fires too, which covers an agent that is down."""
     expressions = [t["expression"] for t in exported_triggers()]
 
-    assert f"nodata(/{TEMPLATE_NAME}/vms.agent_status,{NO_DATA_PERIOD})=1" in expressions
-    assert NO_DATA_PERIOD == "5m"
+    assert f"nodata(/{TEMPLATE_NAME}/vms.agent_status,5m)=1" in expressions
 
 
 def test_every_exported_object_has_a_uuid():

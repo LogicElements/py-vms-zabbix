@@ -343,10 +343,22 @@ logovacího souboru a ty zásadní i do Windows Event Logu.
 - `vms.agent_error` nese text poslední chyby nebo varování; při stavu 0 je prázdný.
 - Text chyby odpovídá záznamu v logovacím souboru a zkracuje se na 255 znaků, aby se vešel do položky typu Character.
 
+Sada triggerů, které šablona obsahuje:
+
+| Název triggeru | Klíč metriky | Podmínka | Priorita |
+| --- | --- | --- | --- |
+| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | AVERAGE |
+| Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH |
+| Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE |
+
+`{METRIC}` v podmínce zastupuje odkaz na metriku ve tvaru `/<název šablony>/<klíč metriky>`.
+Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
+
 ### UC5-R4
-**Popis:** Šablona pro Zabbix obsahuje mapování stavů a triggery, které chybu ohlásí.
+**Popis:** Šablona pro Zabbix obsahuje mapování stavů a triggery vedené jako tabulka v této PRS.
 **DoD:**
 - Šablona obsahuje value map, která u `vms.agent_status` překládá hodnoty 0, 1 a 2 na text.
-- Šablona obsahuje trigger, který se spustí, je-li `vms.agent_status` větší než 0.
-- Šablona obsahuje trigger, který se spustí při neprázdném `vms.agent_error`, a text chyby je součástí jména triggeru.
-- Šablona obsahuje trigger, který se spustí, nedorazí-li na host žádná hodnota po dobu 5 minut; ten pokrývá i případ, kdy agent neběží nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.
+- Šablona obsahuje právě triggery z tabulky výše – žádný navíc a žádný nevynechává.
+- Každý trigger má název, podmínku a prioritu podle svého řádku tabulky.
+- Každý trigger se odkazuje na klíč metriky, který je v tabulce metrik v UC3.
+- Tabulka obsahuje trigger na stav agenta, trigger na neprázdný `vms.agent_error` s textem chyby ve jméně a trigger na to, že na host nedorazila žádná hodnota po dobu 5 minut; ten pokrývá i případ, kdy agent neběží nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.

@@ -124,6 +124,42 @@ METRICS = (
     ),
 )
 
+@dataclass(frozen=True)
+class Trigger:
+    """One trigger of the template, as its row of the trigger table in the PRS."""
+
+    name: str
+    key: str
+    condition: str
+    priority: str
+
+
+# What the condition writes instead of the reference to the metric.
+METRIC_PLACEHOLDER = "{METRIC}"
+
+# The triggers mirror the trigger table of the PRS. The key decides which item of the
+# template the trigger ends up under, which is where an export keeps its triggers.
+TRIGGERS = (
+    Trigger(
+        name="Agent hlásí chybu nebo varování",
+        key="vms.agent_status",
+        condition="last({METRIC})>0",
+        priority="AVERAGE",
+    ),
+    Trigger(
+        name="Z hostu nepřišla žádná hodnota 5m",
+        key="vms.agent_status",
+        condition="nodata({METRIC},5m)=1",
+        priority="HIGH",
+    ),
+    Trigger(
+        name="Chyba agenta: {ITEM.VALUE}",
+        key="vms.agent_error",
+        condition="length(last({METRIC}))>0",
+        priority="AVERAGE",
+    ),
+)
+
 KEYS = tuple(metric.key for metric in METRICS)
 
 # The split follows the Zdroj column of the source table in the PRS: the agent reports

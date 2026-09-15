@@ -89,16 +89,14 @@ zabbix_export:
       valuemap:
         name: Stav agenta
       triggers:
-      - uuid: afe7934c6993406eb5c743e73124c96c
+      - uuid: 4839d6403cb443ca8ec1ea4948914e0a
         expression: last(/VMS zabbix agent/vms.agent_status)>0
         name: Agent hlásí chybu nebo varování
         priority: AVERAGE
-        description: Stav agenta je jiný než 0; popis nese vms.agent_error.
-      - uuid: 7a14edbe214146b7b0b4dcc572f869ce
+      - uuid: e03c986615a04339a63b8f99f03e7c24
         expression: nodata(/VMS zabbix agent/vms.agent_status,5m)=1
         name: Z hostu nepřišla žádná hodnota 5m
         priority: HIGH
-        description: Agent neběží, nebo se nedostane k databázi či k Zabbixu.
     - uuid: 2a536152869e42d39c0b77a952ca8b84
       name: Poslední chyba agenta
       type: TRAP
@@ -106,11 +104,10 @@ zabbix_export:
       value_type: CHAR
       description: Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku.
       triggers:
-      - uuid: aaf8fe4175d74f9781cf2acf04103a77
+      - uuid: 04c99cd5862446d195346cbd5a26b96d
         expression: length(last(/VMS zabbix agent/vms.agent_error))>0
         name: 'Chyba agenta: {ITEM.VALUE}'
         priority: AVERAGE
-        description: Agent hlásí text chyby nebo varování.
     valuemaps:
     - uuid: 7508a404e6db427c9cb2fcaca34c537c
       name: Stav agenta
