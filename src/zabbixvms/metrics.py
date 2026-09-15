@@ -41,26 +41,26 @@ METRICS = (
     Metric(
         key="vms.info_age",
         name="Stáří info záznamu",
-        value_type=ValueType.FLOAT,
+        value_type=ValueType.UNSIGNED,
         units="s",
         description="Doba od poslední aktualizace tabulky `info`. "
-                    "Hodnota -1 znamená, že údaj není k dispozici.",
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
         key="vms.timestamp_age",
         name="Stáří timestamp dat",
-        value_type=ValueType.FLOAT,
+        value_type=ValueType.UNSIGNED,
         units="s",
         description="Doba od posledních přijatých timestamp dat. "
-                    "Hodnota -1 znamená, že údaj není k dispozici.",
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
         key="vms.config_age",
         name="Stáří konfiguračních dat",
-        value_type=ValueType.FLOAT,
+        value_type=ValueType.UNSIGNED,
         units="s",
         description="Doba od posledních přijatých konfiguračních dat. "
-                    "Hodnota -1 znamená, že údaj není k dispozici.",
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
         key="vms.buf_rows_1",
@@ -79,18 +79,18 @@ METRICS = (
     Metric(
         key="vms.buf_age_1",
         name="Stáří bufferu 1",
-        value_type=ValueType.FLOAT,
+        value_type=ValueType.UNSIGNED,
         units="s",
         description="Doba od posledních dat přijatých do bufferu 1. "
-                    "Hodnota -1 znamená, že údaj není k dispozici.",
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
         key="vms.buf_age_2",
         name="Stáří bufferu 2",
-        value_type=ValueType.FLOAT,
+        value_type=ValueType.UNSIGNED,
         units="s",
         description="Doba od posledních dat přijatých do bufferu 2. "
-                    "Hodnota -1 znamená, že údaj není k dispozici.",
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
         key="vms.buf_bulk_1",

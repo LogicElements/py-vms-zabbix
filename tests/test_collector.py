@@ -10,7 +10,7 @@ from zabbixvms import metrics
 from zabbixvms.collector import (
     INFO_COLUMNS,
     MAX_AGE,
-    UNAVAILABLE,
+    MAX_AGE_SECONDS,
     Collector,
     CollectorError,
     age,
@@ -106,19 +106,35 @@ def test_age_is_whole_seconds():
     assert age(NOW - timedelta(seconds=42, milliseconds=800), NOW) == 42
 
 
-def test_age_at_the_limit_is_still_reported():
-    """UC4-R4: -1 starts above five years, exactly 1825 days is a value."""
-    assert age(NOW - MAX_AGE, NOW) == int(MAX_AGE.total_seconds())
+def test_age_at_the_limit_is_reported_as_it_is():
+    """UC4-R4: exactly one month is still a computed value."""
+    assert age(NOW - MAX_AGE, NOW) == MAX_AGE_SECONDS
+    assert MAX_AGE == timedelta(days=30)
 
 
-def test_age_above_five_years_is_unavailable():
-    """UC4-R4: an age over 1825 days is sent as -1."""
-    assert age(NOW - MAX_AGE - timedelta(seconds=1), NOW) == UNAVAILABLE
-    assert age(datetime(1, 1, 1), NOW) == UNAVAILABLE
+def test_age_above_one_month_saturates():
+    """UC4-R4: older data says the same thing, so it is reported as one month."""
+    assert age(NOW - MAX_AGE - timedelta(seconds=1), NOW) == MAX_AGE_SECONDS
+    assert age(NOW - timedelta(days=365), NOW) == MAX_AGE_SECONDS
+    # The database writes this date for "never".
+    assert age(datetime(1, 1, 1), NOW) == MAX_AGE_SECONDS
 
 
-def test_age_of_a_missing_value_is_unavailable():
-    assert age(None, NOW) == UNAVAILABLE
+def test_age_of_a_missing_value_is_the_oldest_there_is():
+    """UC4-R4: no date means the data never came, which saturates as well."""
+    assert age(None, NOW) == MAX_AGE_SECONDS
+
+
+def test_age_of_a_date_in_the_future_is_zero():
+    """UC4-R4: an unsigned item could not hold a negative age."""
+    assert age(NOW + timedelta(seconds=30), NOW) == 0
+
+
+def test_no_age_is_ever_negative():
+    """UC4-R4: Zabbix would refuse a negative value on an unsigned item."""
+    for moment in (None, datetime(1, 1, 1), NOW, NOW + timedelta(days=1),
+                   NOW - timedelta(days=90)):
+        assert age(moment, NOW) >= 0
 
 
 def test_collected_keys_match_the_catalog():

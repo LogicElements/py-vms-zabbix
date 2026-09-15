@@ -22,23 +22,25 @@ zabbix_export:
       name: Stáří info záznamu
       type: TRAP
       key: vms.info_age
-      value_type: FLOAT
-      description: Doba od poslední aktualizace tabulky `info`. Hodnota -1 znamená, že údaj není k dispozici.
+      value_type: UNSIGNED
+      description: Doba od poslední aktualizace tabulky `info`. Hodnoty nad jeden měsíc se hlásí jako
+        jeden měsíc.
       units: s
     - uuid: b5af6061c19c4011843ad8aa3f7b2415
       name: Stáří timestamp dat
       type: TRAP
       key: vms.timestamp_age
-      value_type: FLOAT
-      description: Doba od posledních přijatých timestamp dat. Hodnota -1 znamená, že údaj není k dispozici.
+      value_type: UNSIGNED
+      description: Doba od posledních přijatých timestamp dat. Hodnoty nad jeden měsíc se hlásí jako jeden
+        měsíc.
       units: s
     - uuid: 1c725e79f2cb408a9031ba9d6a77bd06
       name: Stáří konfiguračních dat
       type: TRAP
       key: vms.config_age
-      value_type: FLOAT
-      description: Doba od posledních přijatých konfiguračních dat. Hodnota -1 znamená, že údaj není k
-        dispozici.
+      value_type: UNSIGNED
+      description: Doba od posledních přijatých konfiguračních dat. Hodnoty nad jeden měsíc se hlásí jako
+        jeden měsíc.
       units: s
     - uuid: 1be3a968357b42bfad694d2885f54863
       name: Počet řádků v bufferu 1
@@ -56,15 +58,17 @@ zabbix_export:
       name: Stáří bufferu 1
       type: TRAP
       key: vms.buf_age_1
-      value_type: FLOAT
-      description: Doba od posledních dat přijatých do bufferu 1. Hodnota -1 znamená, že údaj není k dispozici.
+      value_type: UNSIGNED
+      description: Doba od posledních dat přijatých do bufferu 1. Hodnoty nad jeden měsíc se hlásí jako
+        jeden měsíc.
       units: s
     - uuid: 00dbc7d424f047faaacef40d83cd2e4f
       name: Stáří bufferu 2
       type: TRAP
       key: vms.buf_age_2
-      value_type: FLOAT
-      description: Doba od posledních dat přijatých do bufferu 2. Hodnota -1 znamená, že údaj není k dispozici.
+      value_type: UNSIGNED
+      description: Doba od posledních dat přijatých do bufferu 2. Hodnoty nad jeden měsíc se hlásí jako
+        jeden měsíc.
       units: s
     - uuid: 56ebce1768864dd2996bc10b4f878b2b
       name: Doba bulk zápisu 1

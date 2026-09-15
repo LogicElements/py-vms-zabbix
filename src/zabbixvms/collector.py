@@ -26,10 +26,11 @@ INFO_COLUMNS = (
     "Time_bulk_2",
 )
 
-# An age above this is nonsense (the database keeps 0001-01-01 for "never") and is
-# reported as unavailable instead.
-MAX_AGE = timedelta(days=1825)
-UNAVAILABLE = -1
+# Ages are reported up to one month; anything older says the same thing, that the data
+# stopped coming long ago. The database keeps 0001-01-01 for "never", which saturates
+# here like any other very old date.
+MAX_AGE = timedelta(days=30)
+MAX_AGE_SECONDS = int(MAX_AGE.total_seconds())
 
 # Metrics of a buffer the turbine does not have configured.
 NO_BUFFER = 0
@@ -50,16 +51,16 @@ def speed(phase_marker: int | None) -> float:
 
 
 def age(moment: datetime | None, now: datetime) -> int:
-    """Whole seconds between moment and the measurement time.
+    """Whole seconds between moment and the measurement time, at most one month.
 
-    An age above five years, and a missing value, mean the datum is unavailable.
+    A missing value means the data never came, which is as old as it gets and
+    saturates too. A date in the future would be a negative age, which an unsigned
+    item cannot hold, so it reads as zero.
     """
     if moment is None:
-        return UNAVAILABLE
-    elapsed = now - moment
-    if elapsed > MAX_AGE:
-        return UNAVAILABLE
-    return int(elapsed.total_seconds())
+        return MAX_AGE_SECONDS
+    elapsed = int((now - moment).total_seconds())
+    return max(0, min(elapsed, MAX_AGE_SECONDS))
 
 
 class Collector:
