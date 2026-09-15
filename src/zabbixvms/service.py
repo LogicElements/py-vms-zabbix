@@ -20,7 +20,7 @@ import win32serviceutil
 
 from zabbixvms import log as logging_setup
 from zabbixvms.agent import Agent
-from zabbixvms.config import load_config
+from zabbixvms.config import config_path, load_config
 from zabbixvms.log import log
 
 SERVICE_NAME = "ZabbixVms"
@@ -57,6 +57,23 @@ FORBIDDEN_USER_RIGHTS = (
     | ntsecuritycon.WRITE_DAC
     | ntsecuritycon.WRITE_OWNER
 )
+
+# What ordinary users may do with the files in ProgramData: read, write and delete
+# them, which is what Windows calls Modify. The service creates the configuration and
+# the log as LocalSystem, and without this an ordinary user could only read them -
+# the tray could not write to the log and the operator could not save a changed
+# configuration.
+DATA_RIGHTS = (
+    ntsecuritycon.FILE_GENERIC_READ
+    | ntsecuritycon.FILE_GENERIC_WRITE
+    | ntsecuritycon.FILE_GENERIC_EXECUTE
+    | ntsecuritycon.DELETE
+)
+
+# The entry is inherited by the folder's files and subfolders, so it also covers the
+# configuration and the log that are already in there.
+DATA_INHERITANCE = (ntsecuritycon.OBJECT_INHERIT_ACE
+                    | ntsecuritycon.CONTAINER_INHERIT_ACE)
 
 
 class ZabbixVmsService(win32serviceutil.ServiceFramework):
@@ -137,6 +154,38 @@ def grant_user_control(service_name: str = SERVICE_NAME) -> None:
         win32service.CloseServiceHandle(manager)
 
 
+def grant_data_access(dacl, sid=USERS_SID, rights: int = DATA_RIGHTS):
+    """Add an inheritable allow entry to a folder's DACL, unless it is already in.
+
+    Registering twice must not pile the same entry up again.
+    """
+    for index in range(dacl.GetAceCount()):
+        (ace_type, flags), mask, ace_sid = dacl.GetAce(index)
+        if (ace_type == ntsecuritycon.ACCESS_ALLOWED_ACE_TYPE and ace_sid == sid
+                and mask == rights and flags & DATA_INHERITANCE == DATA_INHERITANCE):
+            return dacl
+    dacl.AddAccessAllowedAceEx(win32security.ACL_REVISION, DATA_INHERITANCE,
+                               rights, sid)
+    return dacl
+
+
+def grant_users_data_folder() -> Path:
+    """Let ordinary users write the configuration and the log in ProgramData."""
+    folder = config_path().parent
+    folder.mkdir(parents=True, exist_ok=True)
+
+    descriptor = win32security.GetNamedSecurityInfo(
+        str(folder), win32security.SE_FILE_OBJECT,
+        win32security.DACL_SECURITY_INFORMATION)
+    dacl = grant_data_access(descriptor.GetSecurityDescriptorDacl())
+    # SetNamedSecurityInfo, unlike SetFileSecurity, hands the inheritable entry down
+    # to the files that are in the folder already.
+    win32security.SetNamedSecurityInfo(
+        str(folder), win32security.SE_FILE_OBJECT,
+        win32security.DACL_SECURITY_INFORMATION, None, None, dacl, None)
+    return folder
+
+
 def tray_executable() -> str:
     """Path of the tray application's executable installed beside this one."""
     beside = Path(sys.executable).parent / f"{TRAY_COMMAND}.exe"
@@ -185,6 +234,7 @@ def install() -> None:
         startType=win32service.SERVICE_AUTO_START,
     )
     grant_user_control()
+    grant_users_data_folder()
     register_tray_autostart()
     logging_setup.register_event_source()
 

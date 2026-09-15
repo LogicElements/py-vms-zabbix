@@ -141,10 +141,13 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Open configuration.
 9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
 
-**Stav:** kroky 1 až 8 jsou hotové, krok 9 je ověřený až na jednu položku. Barvy ikony,
-tři akce z menu i otevření konfigurace prošly, takže UC1-R5, UC1-R6 a UC2-R8 jsou Hotovo.
-Zbývá jediné: automatické spuštění po přihlášení (UC1-R8), na které je potřeba odhlášení
-a restart serveru.
+**Stav:** kroky 1 až 8 jsou hotové, z kroku 9 prošly barvy ikony a tři akce z menu, takže
+UC1-R5 a UC1-R6 jsou Hotovo. Zbývá automatické spuštění po přihlášení (UC1-R8), na které je
+potřeba odhlášení a restart serveru, a znovu **UC2-R8**: otevřít konfiguraci šlo, ale uložit
+ji ne, protože soubor vytvořila služba pod LocalSystem a `Users` na něm měli jen čtení. Řeší
+to `grant_users_data_folder()` v `service.py`, ověřit se to musí po nové instalaci.
+
+Ikona nese uprostřed písmeno Z, aby nebyla jen barevným čtvercem.
 
 Nad rámec PRS má menu ještě položku Ukončit, protože jinak nešla tray aplikace ukončit
 jinak než přes Správce úloh. Ptá se na potvrzení s předvybraným Ne, aby ji omylem
@@ -185,8 +188,15 @@ zkontrolovat, že ikona je v systray. Po `zabbixvms-service remove` už hodnota
 7. Napsat testy proti podvrženým objektům: rotace logu po dosažení velikosti, stav 0, 1 a 2 podle průběhu cyklu, prázdný `vms.agent_error` při stavu 0, zkrácení textu na 255 znaků, odeslání obou metrik na každý host.
 8. Ručně ověřit záznam startu a zastavení služby v Event Vieweru.
 
-**Stav:** kroky 1 až 7 jsou hotové, krok 8 zbývá – potřebuje zaregistrovaný zdroj událostí,
-tedy práva administrátora. Do jeho dokončení zůstává UC5-R2 ve stavu Zbývá.
+**Stav:** kroky 1 až 7 jsou hotové. Krok 8 proběhl: start i zastavení služby se v Prohlížeči
+událostí objevily pod zdrojem `ZabbixVms`, takže UC5-R2 je Hotovo.
+
+**UC5-R1 se ale musel vrátit na Zbývá.** Zápis do jednoho logu ze dvou procesů selhával
+i po opravě zámkem, protože soubor zakládá služba pod LocalSystem a `Users` na něm měli jen
+čtení – tray hlásil `PermissionError` a jeho záznamy se ztrácely. Řeší to
+`grant_users_data_folder()` v `service.py`, které při registraci dá skupině `BUILTIN\Users`
+na složku v `ProgramData` právo Modify s děděním; ověřeno, že se dědění propíše i na soubory,
+které tam už jsou. Znovu ověřit po nové instalaci.
 
 Dvě rozhodnutí, která při implementaci padla:
 

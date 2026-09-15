@@ -213,6 +213,66 @@ def test_remove_unregisters_the_service(monkeypatch):
     assert removed == [SERVICE_NAME]
 
 
+def test_data_rights_let_a_user_write_and_delete():
+    """UC2-R8, UC5-R1: an ordinary user may save the configuration and the log."""
+    assert service_module.DATA_RIGHTS & ntsecuritycon.FILE_GENERIC_WRITE
+    assert service_module.DATA_RIGHTS & ntsecuritycon.FILE_GENERIC_READ
+    assert service_module.DATA_RIGHTS & ntsecuritycon.DELETE
+
+
+def test_data_entry_is_inherited_by_the_files_in_the_folder():
+    """The configuration and the log are files, so the entry has to reach them."""
+    descriptor = win32security.SECURITY_DESCRIPTOR()
+    dacl = win32security.ACL()
+
+    service_module.grant_data_access(dacl)
+
+    (ace_type, flags), mask, sid = dacl.GetAce(0)
+    assert ace_type == ntsecuritycon.ACCESS_ALLOWED_ACE_TYPE
+    assert flags & ntsecuritycon.OBJECT_INHERIT_ACE
+    assert flags & ntsecuritycon.CONTAINER_INHERIT_ACE
+    assert mask == service_module.DATA_RIGHTS
+    assert sid == USERS_SID
+    descriptor.SetSecurityDescriptorDacl(1, dacl, 0)
+
+
+def test_the_data_entry_is_added_only_once():
+    """Registering the agent again must not pile the same entry up."""
+    dacl = win32security.ACL()
+
+    service_module.grant_data_access(dacl)
+    service_module.grant_data_access(dacl)
+
+    assert dacl.GetAceCount() == 1
+
+
+def test_data_entry_keeps_what_the_folder_already_had():
+    dacl = win32security.ACL()
+    system = win32security.CreateWellKnownSid(win32security.WinLocalSystemSid)
+    dacl.AddAccessAllowedAce(win32security.ACL_REVISION, ntsecuritycon.GENERIC_ALL,
+                             system)
+
+    service_module.grant_data_access(dacl)
+
+    assert dacl.GetAceCount() == 2
+    assert dacl.GetAce(0)[2] == system
+
+
+def test_install_opens_the_data_folder_to_users(monkeypatch):
+    """UC2-R8, UC5-R1: the rights are set by the installation, not by hand."""
+    granted = []
+    monkeypatch.setattr(service_module.win32serviceutil, "InstallService",
+                        lambda **kwargs: None)
+    monkeypatch.setattr(service_module, "grant_user_control", lambda: None)
+    monkeypatch.setattr(service_module, "register_tray_autostart", lambda: None)
+    monkeypatch.setattr(service_module, "grant_users_data_folder",
+                        lambda: granted.append(True))
+
+    service_module.install()
+
+    assert granted == [True]
+
+
 def test_install_registers_the_tray_for_automatic_start(monkeypatch):
     """UC1-R8: the automatic start of the tray is set up by the installation."""
     registered = []
