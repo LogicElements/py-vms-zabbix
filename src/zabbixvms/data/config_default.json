@@ -5,7 +5,7 @@
     "server": "zabbix.logicelements.cz",
     "port": 10051,
     "location": "LE",
-    "period": 5
+    "period": 15
   },
   "database": {
     "py/object": "zabbixvms.config.DatabaseConfig",
