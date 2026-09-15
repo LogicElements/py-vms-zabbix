@@ -24,7 +24,7 @@
 | 3 | Odesílání a smyčka agenta | [x] |
 | 4 | Služba Windows | [x] |
 | 5 | Tray aplikace | [ ] |
-| 6 | Logování a vlastní stav agenta | [ ] |
+| 6 | Logování a vlastní stav agenta | [x] |
 | 7 | Šablona pro Zabbix a návod | [ ] |
 
 
@@ -142,10 +142,9 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
 
 **Stav:** kroky 1 až 8 jsou hotové, z kroku 9 prošly barvy ikony a tři akce z menu, takže
-UC1-R5 a UC1-R6 jsou Hotovo. Zbývá automatické spuštění po přihlášení (UC1-R8), na které je
-potřeba odhlášení a restart serveru, a znovu **UC2-R8**: otevřít konfiguraci šlo, ale uložit
-ji ne, protože soubor vytvořila služba pod LocalSystem a `Users` na něm měli jen čtení. Řeší
-to `grant_users_data_folder()` v `service.py`, ověřit se to musí po nové instalaci.
+UC1-R5 a UC1-R6 jsou Hotovo. UC2-R8 je Hotovo až po opravě práv k složce v `ProgramData` (viz etapa 6) – otevřít
+konfiguraci šlo hned, ale uložit ji ne. Zbývá jediné: automatické spuštění po přihlášení
+(UC1-R8), na které je potřeba odhlášení a restart serveru.
 
 Ikona nese uprostřed písmeno Z, aby nebyla jen barevným čtvercem.
 
@@ -191,12 +190,16 @@ zkontrolovat, že ikona je v systray. Po `zabbixvms-service remove` už hodnota
 **Stav:** kroky 1 až 7 jsou hotové. Krok 8 proběhl: start i zastavení služby se v Prohlížeči
 událostí objevily pod zdrojem `ZabbixVms`, takže UC5-R2 je Hotovo.
 
-**UC5-R1 se ale musel vrátit na Zbývá.** Zápis do jednoho logu ze dvou procesů selhával
-i po opravě zámkem, protože soubor zakládá služba pod LocalSystem a `Users` na něm měli jen
-čtení – tray hlásil `PermissionError` a jeho záznamy se ztrácely. Řeší to
-`grant_users_data_folder()` v `service.py`, které při registraci dá skupině `BUILTIN\Users`
-na složku v `ProgramData` právo Modify s děděním; ověřeno, že se dědění propíše i na soubory,
-které tam už jsou. Znovu ověřit po nové instalaci.
+**Hotovo, ale se dvěma zádrhely, které stojí za zapamatování:**
+
+- Zápis do jednoho logu ze dvou procesů nestačí ošetřit jen souběžností. Nejdřív se ukázalo,
+  že režim append na Windows není atomický (ztratilo se 6 z 60 záznamů), což řeší zámek na
+  první bajt souboru. Pak se ukázalo, že tray do logu nesmí vůbec, protože soubor zakládá
+  služba pod LocalSystem a `Users` na něm měli jen čtení – `PermissionError` se navíc nikde
+  neobjevil, protože tray běží bez konzole. Řeší to `grant_users_data_folder()`, které při
+  registraci dá `BUILTIN\Users` na složku v `ProgramData` právo Modify s děděním. Totéž
+  odblokovalo ukládání konfigurace (UC2-R8).
+- Testy zapisovaly do skutečného Windows Event Logu, než to zachytil `tests/conftest.py`.
 
 Dvě rozhodnutí, která při implementaci padla:
 

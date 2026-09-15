@@ -19,7 +19,7 @@
 | UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Hotovo | tests/test_sender.py |
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
-| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Zbývá | |
+| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Hotovo | tests/test_tray.py |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Hotovo | tests/test_collector.py |
@@ -30,7 +30,7 @@
 | UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Hotovo | tests/test_collector.py |
 | UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva 5 sekund mezi cykly měření | Hotovo | tests/test_agent.py |
-| UC5-R1 | Logovací soubor s provozními událostmi a chybami | Zbývá | |
+| UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
 | UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Zbývá | |
