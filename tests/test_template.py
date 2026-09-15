@@ -7,12 +7,15 @@ from zabbixvms import metrics
 from zabbixvms.metrics import ValueType
 from zabbixvms.template import (
     EXPORT_VALUE_TYPES,
+    EXPORT_VERSION,
     NO_DATA_PERIOD,
     STATUS_MAPPINGS,
     STATUS_VALUE_MAP,
+    TEMPLATE_GROUP,
     TEMPLATE_NAME,
     TRAPPER,
     build,
+    groups_section,
     stable_uuid,
     template_path,
     to_yaml,
@@ -37,8 +40,25 @@ def test_template_is_valid_yaml_with_the_export_around_it():
     """UC3-R4: Zabbix can read the file."""
     export = exported()
 
-    assert export["zabbix_export"]["version"]
+    assert export["zabbix_export"]["version"] == EXPORT_VERSION
     assert template_of(export)["template"] == TEMPLATE_NAME
+
+
+def test_the_groups_are_listed_the_way_the_version_wants():
+    """Zabbix 6.4 renamed the section, so the version decides what it is called."""
+    assert groups_section("6.0") == "groups"
+    assert groups_section("6.2") == "groups"
+    assert groups_section("6.4") == "template_groups"
+    assert groups_section("7.0") == "template_groups"
+
+
+def test_the_export_carries_the_group_section_of_its_own_version():
+    export = exported()["zabbix_export"]
+
+    assert groups_section() in export
+    assert export[groups_section()][0]["name"] == TEMPLATE_GROUP
+    # Inside a template the reference is called groups in every version.
+    assert template_of(exported())["groups"][0]["name"] == TEMPLATE_GROUP
 
 
 def test_items_are_exactly_the_metrics_of_the_catalog():
@@ -121,7 +141,7 @@ def test_every_exported_object_has_a_uuid():
     export = exported()
     template = template_of(export)
 
-    assert export["zabbix_export"]["groups"][0]["uuid"]
+    assert export["zabbix_export"][groups_section()][0]["uuid"]
     assert template["uuid"]
     for group in (template["items"], template["triggers"], template["valuemaps"]):
         for entry in group:

@@ -15,9 +15,12 @@ import yaml
 from zabbixvms import metrics
 from zabbixvms.metrics import ValueType
 
-# Export format of Zabbix 6.0. Newer servers import an older format, so this is the
-# one that reaches the widest range of them.
-EXPORT_VERSION = "6.0"
+# Export format the template is written in; it matches the server it is imported into.
+EXPORT_VERSION = "7.0"
+
+# Zabbix 6.4 renamed the section the template groups are listed in, so changing
+# EXPORT_VERSION alone is not enough to move between the formats.
+GROUPS_RENAMED_IN = (6, 4)
 
 TEMPLATE_NAME = "VMS zabbix agent"
 TEMPLATE_GROUP = "Templates/Applications"
@@ -49,6 +52,12 @@ NO_DATA_PERIOD = "5m"
 def stable_uuid(name: str) -> str:
     """Uuid of an exported object, the same for the same name every time."""
     return uuid.uuid5(UUID_NAMESPACE, name).hex
+
+
+def groups_section(version: str = EXPORT_VERSION) -> str:
+    """Name of the section the template groups are listed in for that version."""
+    major, minor = (int(part) for part in version.split(".")[:2])
+    return "groups" if (major, minor) < GROUPS_RENAMED_IN else "template_groups"
 
 
 def template_path() -> Path:
@@ -107,7 +116,7 @@ def build() -> dict:
     return {
         "zabbix_export": {
             "version": EXPORT_VERSION,
-            "groups": [
+            groups_section(): [
                 {"uuid": stable_uuid(f"group:{TEMPLATE_GROUP}"), "name": TEMPLATE_GROUP},
             ],
             "templates": [

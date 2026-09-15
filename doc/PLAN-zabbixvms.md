@@ -233,9 +233,10 @@ v `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`.
 zůstávají UC3-R4 a UC5-R4 ve stavu Zbývá – obě DoD stojí na tom, že se soubor naimportuje
 bez ruční úpravy, a to jde ověřit jen proti skutečnému serveru.
 
-Export je ve formátu **Zabbix 6.0**, protože novější servery umí naimportovat i starší
-formát. Kdyby ho server odmítl, stačí změnit `EXPORT_VERSION` v `template.py`, přegenerovat
-soubor a upravit test. Uuid objektů se odvozují z pevného jmenného prostoru, takže jsou při
+Export je ve formátu **Zabbix 7.0**, tedy ve verzi serveru, do kterého se importuje. Na jiný
+formát se přejde změnou `EXPORT_VERSION` v `template.py` a přegenerováním souboru; pozor, že
+samotná verze nestačí – Zabbix v 6.4 přejmenoval sekci `groups` na `template_groups`, což
+řeší `groups_section()`. Uuid objektů se odvozují z pevného jmenného prostoru, takže jsou při
 každém generování stejné a opakovaný import šablonu aktualizuje místo zakládání druhé.
 
 Ověření: naimportovat `src/zabbixvms/data/zabbix_template.yaml` podle
