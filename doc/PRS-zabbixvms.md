@@ -23,7 +23,7 @@
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Hotovo | tests/test_collector.py |
-| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá | |
+| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Hotovo | tests/test_template.py |
 | UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Hotovo | tests/test_collector.py |
 | UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Hotovo | tests/test_collector_db.py |
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
@@ -33,7 +33,7 @@
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
-| UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Zbývá | |
+| UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Hotovo | tests/test_template.py |
 
 ## Účel projektu
 

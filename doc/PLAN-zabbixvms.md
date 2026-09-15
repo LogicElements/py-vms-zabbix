@@ -25,7 +25,7 @@
 | 4 | Služba Windows | [x] |
 | 5 | Tray aplikace | [ ] |
 | 6 | Logování a vlastní stav agenta | [x] |
-| 7 | Šablona pro Zabbix a návod | [ ] |
+| 7 | Šablona pro Zabbix a návod | [x] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -229,9 +229,20 @@ v `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`.
 6. Sepsat `doc/NAVOD-zabbix.md` se třemi kroky: založení hostu `<location>_<název turbíny>`, import šablony z balíčku a přiřazení šablony hostu.
 7. Doplnit odkaz na návod do rozcestníku v `README.md`.
 
-**Stav:** kroky 1 až 7 jsou hotové, zbývá naimportovat šablonu do Zabbixu. Do té doby
-zůstávají UC3-R4 a UC5-R4 ve stavu Zbývá – obě DoD stojí na tom, že se soubor naimportuje
-bez ruční úpravy, a to jde ověřit jen proti skutečnému serveru.
+**Stav:** hotovo. Šablona se do Zabbixu 7 naimportovala bez ruční úpravy souboru, takže
+UC3-R4 i UC5-R4 jsou Hotovo.
+
+Import napoprvé neprošel a stálo to tři kola. Co z toho platí i pro příští úpravy šablony:
+
+- **Triggery nemají v exportu vlastní sekci pod šablonou.** Každý sedí uvnitř položky, na
+  kterou se jeho výraz odkazuje (`Invalid tag ... unexpected tag "triggers"`).
+- **Uuid musí být verze 4.** Odvozování přes `uuid5`, které drží hodnoty stabilní mezi
+  generováními, dává verzi 5 a Zabbix ho odmítne (`Invalid parameter "/1/uuid": UUIDv4 is
+  expected`). Řeší se přepsáním bitů verze a varianty, hodnota zůstává deterministická.
+- **Sekce skupin se od Zabbixu 6.4 jmenuje `template_groups`**, ne `groups`.
+
+Struktura exportu se z kódu ověřit nedá, rozhodčím je až import na serveru. Testy proto
+drží alespoň to, co už víme: tvar uuid, umístění triggerů i název sekce skupin.
 
 Export je ve formátu **Zabbix 7.0**, tedy ve verzi serveru, do kterého se importuje. Na jiný
 formát se přejde změnou `EXPORT_VERSION` v `template.py` a přegenerováním souboru; pozor, že
