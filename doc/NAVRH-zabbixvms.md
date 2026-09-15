@@ -21,6 +21,7 @@ nepřekrývají.
 src/zabbixvms/
     __init__.py          jen __version__, nic se nereexportuje
     config.py            Config, ZabbixConfig, DatabaseConfig, Turbine
+    log.py               logovací soubor s rotací a zápis do Windows Event Logu
     metrics.py           Metric, ValueType, METRICS – katalog metrik
     collector.py         Collector – čte BVMS a počítá hodnoty metrik
     sender.py            TrapperSender – odesílá hodnoty do Zabbixu
@@ -39,6 +40,7 @@ src/zabbixvms/
 | Modul | Odpovědnost | Requirementy |
 | --- | --- | --- |
 | `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů | UC2-R1 až UC2-R8 |
+| `log.py` | logovací soubor vedle konfigurace, rotace, souběžný zápis služby i tray aplikace, zápis do Event Logu | UC5-R1, UC5-R2 |
 | `metrics.py` | definice metrik: klíč, název, typ hodnoty, jednotka, popis | UC3-R1, UC3-R2 |
 | `collector.py` | čtení řádku informační tabulky a počtů řádků bufferů, výpočet hodnot | UC4-R1 až UC4-R5 |
 | `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>`, kontrola odmítnutých hodnot | UC2-R2, UC2-R5 |

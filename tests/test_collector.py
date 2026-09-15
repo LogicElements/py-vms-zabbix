@@ -218,6 +218,42 @@ def test_missing_buffer_table_counts_no_rows():
     assert values["vms.buf_rows_1"] == 0
 
 
+def test_missing_buffer_table_is_worth_a_warning():
+    """UC5-R3: zero rows and a missing table look the same, so it is said out loud."""
+    turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_gone"])
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)], table_rows={})
+    collector = make_collector(connection)
+
+    collector.collect(turbine, NOW)
+
+    assert len(collector.warnings) == 1
+    assert "buffer_gone" in collector.warnings[0]
+    assert "TG1" in collector.warnings[0]
+
+
+def test_a_buffer_table_that_is_there_warns_about_nothing():
+    turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_le"])
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)],
+                                table_rows={"buffer_le": 0})
+    collector = make_collector(connection)
+
+    collector.collect(turbine, NOW)
+
+    assert collector.warnings == []
+
+
+def test_warnings_do_not_pile_up_between_turbines():
+    """Each collect() says what it found itself, not what the one before found."""
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)],
+                                table_rows={"buffer_le": 5})
+    collector = make_collector(connection)
+
+    collector.collect(Turbine(name="TG1", system_id=11, buffers=["chybi"]), NOW)
+    collector.collect(Turbine(name="TG2", system_id=11, buffers=["buffer_le"]), NOW)
+
+    assert collector.warnings == []
+
+
 def test_info_row_is_read_by_system_id_from_the_configured_table():
     """UC4-R2: the row is chosen by the system_id of the turbine."""
     turbine = Turbine(name="TG2", system_id=12, buffers=[])

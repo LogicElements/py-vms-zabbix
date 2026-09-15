@@ -30,9 +30,9 @@
 | UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Hotovo | tests/test_collector.py |
 | UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva 5 sekund mezi cykly měření | Hotovo | tests/test_agent.py |
-| UC5-R1 | Logovací soubor s provozními událostmi a chybami | Zbývá | |
+| UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Zbývá | |
-| UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Zbývá | |
+| UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
 | UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Zbývá | |
 
 ## Účel projektu

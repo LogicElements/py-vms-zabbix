@@ -162,6 +162,15 @@ def test_users_sid_is_the_builtin_users_group():
     assert win32security.ConvertSidToStringSid(USERS_SID) == "S-1-5-32-545"
 
 
+@pytest.fixture(autouse=True)
+def without_privileged_calls(monkeypatch):
+    """Keep the tests away from the registry; registering really needs an admin."""
+    monkeypatch.setattr(service_module.logging_setup, "register_event_source",
+                        lambda: None)
+    monkeypatch.setattr(service_module.logging_setup, "unregister_event_source",
+                        lambda: None)
+
+
 def test_install_registers_with_automatic_start(monkeypatch):
     """UC1-R3: the registered service starts with the system."""
     captured = {}

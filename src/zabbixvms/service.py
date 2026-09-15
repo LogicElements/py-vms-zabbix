@@ -18,8 +18,10 @@ import win32security
 import win32service
 import win32serviceutil
 
+from zabbixvms import log as logging_setup
 from zabbixvms.agent import Agent
 from zabbixvms.config import load_config
+from zabbixvms.log import log
 
 SERVICE_NAME = "ZabbixVms"
 DISPLAY_NAME = "VMS zabbix agent"
@@ -75,7 +77,17 @@ class ZabbixVmsService(win32serviceutil.ServiceFramework):
         as a service that refuses to start instead of one that runs and reports
         nothing.
         """
-        self._agent = self.build_agent()
+        logging_setup.setup()
+        try:
+            self._agent = self.build_agent()
+        except Exception as err:
+            message = f"service {SERVICE_NAME} cannot start: {err}"
+            log.error(message)
+            logging_setup.report_event(message, error=True)
+            raise
+
+        log.info("service %s started", SERVICE_NAME)
+        logging_setup.report_event(f"service {SERVICE_NAME} started")
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
         self._agent.run()
 
@@ -84,6 +96,8 @@ class ZabbixVmsService(win32serviceutil.ServiceFramework):
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         if self._agent is not None:
             self._agent.stop()
+        log.info("service %s stopped", SERVICE_NAME)
+        logging_setup.report_event(f"service {SERVICE_NAME} stopped")
 
     @staticmethod
     def build_agent() -> Agent:
@@ -172,11 +186,13 @@ def install() -> None:
     )
     grant_user_control()
     register_tray_autostart()
+    logging_setup.register_event_source()
 
 
 def remove() -> None:
     """Unregister the service and stop starting the tray application."""
     unregister_tray_autostart()
+    logging_setup.unregister_event_source()
     win32serviceutil.RemoveService(SERVICE_NAME)
 
 

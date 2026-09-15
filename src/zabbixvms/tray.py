@@ -18,7 +18,9 @@ import win32gui
 import win32service
 import win32ui
 
+from zabbixvms import log as logging_setup
 from zabbixvms.config import config_path
+from zabbixvms.log import log
 from zabbixvms.service import DISPLAY_NAME
 from zabbixvms.servicecontrol import ServiceController
 
@@ -107,14 +109,17 @@ class TrayApp:
         getattr(self, MENU[index][1])()
 
     def start_service(self) -> None:
+        log.info("tray: starting the service")
         self._controller.start()
         self.poll()
 
     def stop_service(self) -> None:
+        log.info("tray: stopping the service")
         self._controller.stop()
         self.poll()
 
     def restart_service(self) -> None:
+        log.info("tray: restarting the service")
         self._controller.restart()
         self.poll()
 
@@ -261,4 +266,9 @@ class TrayIcon:
 
 def main() -> None:
     """Entry point of the zabbixvms-tray command."""
-    TrayApp().run()
+    logging_setup.setup()
+    log.info("tray application started")
+    try:
+        TrayApp().run()
+    finally:
+        log.info("tray application ended")

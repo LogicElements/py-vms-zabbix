@@ -185,6 +185,25 @@ zkontrolovat, že ikona je v systray. Po `zabbixvms-service remove` už hodnota
 7. Napsat testy proti podvrženým objektům: rotace logu po dosažení velikosti, stav 0, 1 a 2 podle průběhu cyklu, prázdný `vms.agent_error` při stavu 0, zkrácení textu na 255 znaků, odeslání obou metrik na každý host.
 8. Ručně ověřit záznam startu a zastavení služby v Event Vieweru.
 
+**Stav:** kroky 1 až 7 jsou hotové, krok 8 zbývá – potřebuje zaregistrovaný zdroj událostí,
+tedy práva administrátora. Do jeho dokončení zůstává UC5-R2 ve stavu Zbývá.
+
+Dvě rozhodnutí, která při implementaci padla:
+
+- **Souběžný zápis do jednoho logu.** Otevřít soubor v režimu append nestačí – běhové
+  prostředí C ve Windows append emuluje seekem na konec a zápisem, takže si dva procesy
+  záznamy přepisují. Ověřeno: ze 60 záznamů se jich ztratilo 6. Každý záznam se proto
+  zapisuje pod výhradním zámkem na první bajt souboru (`msvcrt.locking`). Po opravě prošel
+  zátěžový test se čtyřmi procesy a 1200 záznamy bez jediné ztráty.
+- **Zdroj varování (stav 1).** DoD popisuje stav 1 jako varování, po kterém agent pokračuje,
+  ale neříká, co ho vyvolá. Použil se případ, kdy turbína má v konfiguraci bufferovou
+  tabulku, která v databázi není: agent počítá dál, ale nula řádků by vypadala jako prázdný
+  buffer, což je něco úplně jiného než chybějící tabulka.
+
+Ruční ověření: po `zabbixvms-service install` spustit a zastavit službu a v Prohlížeči
+událostí (Windows Logs → Application) najít události zdroje `ZabbixVms`. Log soubor je
+v `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`.
+
 ### Etapa 7 – Šablona pro Zabbix a návod
 **Účel:** Vygenerovat šablonu z katalogu metrik a popsat její nasazení.
 **Řeší:** UC3-R4, UC5-R4

@@ -69,6 +69,9 @@ class Collector:
         self._database = database
         self._connect = connect
         self._connection = None
+        # Things worth telling about that do not stop the collection; filled by
+        # collect() for the turbine it was called with.
+        self.warnings: list[str] = []
 
     def connect(self) -> None:
         """Open the connection to MySQL using the values from the configuration."""
@@ -132,8 +135,16 @@ class Collector:
         """Values of all collected metrics of one turbine, keyed by metric key."""
         if now is None:
             now = datetime.now()
+        self.warnings = []
         info = self.read_info(turbine)
         buffer_rows = self.read_buffer_rows(turbine)
+        for table in turbine.buffers:
+            if table not in buffer_rows:
+                # Counting zero rows here would look like an empty buffer, which is
+                # something else entirely than a table that is not there.
+                self.warnings.append(
+                    f"buffer table {table!r} of turbine {turbine.name!r} is not in "
+                    f"database {self._database.database}")
         return self.values(turbine, info, buffer_rows, now)
 
     @staticmethod
