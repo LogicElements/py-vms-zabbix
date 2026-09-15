@@ -13,7 +13,7 @@
 | UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Hotovo | tests/test_service.py |
 | UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá | |
 | UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Hotovo | tests/test_config.py |
-| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení a `location` | Hotovo | tests/test_sender.py |
+| UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení, `location` a prodleva | Hotovo | tests/test_sender.py |
 | UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Hotovo | tests/test_config.py |
 | UC2-R4 | Agent konfiguraci při svém běhu nepřepisuje | Hotovo | tests/test_config.py |
 | UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Hotovo | tests/test_sender.py |
@@ -29,7 +29,7 @@
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
 | UC4-R4 | Stáří v celých sekundách proti času měření, nad 5 let jako -1 | Hotovo | tests/test_collector.py |
 | UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Hotovo | tests/test_collector.py |
-| UC4-R6 | Prodleva 5 sekund mezi cykly měření | Hotovo | tests/test_agent.py |
+| UC4-R6 | Prodleva mezi cykly měření nastavitelná v rozsahu 5 až 120 sekund | Hotovo | tests/test_agent.py |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
@@ -134,6 +134,7 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 **DoD:**
 - Skupina obsahuje adresu Zabbix serveru a číslo portu jeho trapperu.
 - Skupina obsahuje `location` – textové označení lokality, ze kterého se skládá název hostu v Zabbixu (viz UC2-R5).
+- Skupina obsahuje prodlevu mezi cykly měření v sekundách (viz UC4-R6).
 - Agent odesílá metriky na adresu a port uvedené v konfiguraci.
 - Změna kterékoli z těchto hodnot se projeví po restartu služby, bez úpravy kódu.
 
@@ -303,9 +304,12 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 - Metriky bufferu, který turbína nemá nastavený, se odesílají s hodnotou 0; hodnoty ze sloupců informační tabulky se pro něj nepoužijí.
 
 ### UC4-R6
-**Popis:** Agent opakuje cyklus měření s prodlevou 5 sekund mezi cykly.
+**Popis:** Agent opakuje cyklus měření s prodlevou, kterou lze nastavit v konfiguraci.
 **DoD:**
-- Mezi dokončením jednoho cyklu měření a začátkem následujícího uplyne 5 sekund.
+- Prodleva se nastavuje v konfiguraci ve skupině parametrů odesílání do Zabbixu, v sekundách.
+- Mezi dokončením jednoho cyklu měření a začátkem následujícího uplyne nastavená prodleva.
+- Povolený rozsah je 5 až 120 sekund; konfiguraci s hodnotou mimo tento rozsah agent odmítne jako neplatnou.
+- Není-li prodleva v konfiguraci uvedená, použije se 5 sekund, takže konfigurace zapsaná starší verzí agenta zůstává platná.
 - Jeden cyklus zahrnuje odeslání metrik všech turbín z konfigurace.
 
 ## UC5 – Hlášení chyb a provozních událostí

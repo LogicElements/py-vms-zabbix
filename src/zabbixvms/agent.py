@@ -12,12 +12,13 @@ from __future__ import annotations
 import time
 
 from zabbixvms.collector import Collector
-from zabbixvms.config import Config
+from zabbixvms.config import DEFAULT_PERIOD, Config
 from zabbixvms.log import log
 from zabbixvms.sender import TrapperSender
 
-# Delay between the end of one measurement cycle and the start of the next.
-CYCLE_DELAY = 5
+# Delay between the end of one measurement cycle and the start of the next; it comes
+# from the configuration, this is what an agent without one would wait.
+CYCLE_DELAY = DEFAULT_PERIOD
 
 # Values of vms.agent_status.
 OK = 0
@@ -52,6 +53,11 @@ class Agent:
     def running(self) -> bool:
         return self._running
 
+    @property
+    def period(self) -> int:
+        """Seconds waited between cycles, as the configuration sets them."""
+        return self._config.zabbix.period
+
     def cycle(self) -> None:
         """One measurement cycle: every turbine collected and sent."""
         self._warnings = []
@@ -80,7 +86,7 @@ class Agent:
             self.status = status
             self.error_text = message[:MAX_ERROR_LENGTH]
             self.report_state()
-            self._sleep(CYCLE_DELAY)
+            self._sleep(self.period)
 
     def stop(self) -> None:
         """Ask the loop to finish and release the database connection."""

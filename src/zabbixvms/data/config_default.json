@@ -4,7 +4,8 @@
     "py/object": "zabbixvms.config.ZabbixConfig",
     "server": "zabbix.logicelements.cz",
     "port": 10051,
-    "location": "LE"
+    "location": "LE",
+    "period": 5
   },
   "database": {
     "py/object": "zabbixvms.config.DatabaseConfig",

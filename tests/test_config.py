@@ -7,6 +7,9 @@ import pytest
 
 from zabbixvms import config as config_module
 from zabbixvms.config import (
+    DEFAULT_PERIOD,
+    MAX_PERIOD,
+    MIN_PERIOD,
     Config,
     ConfigError,
     DatabaseConfig,
@@ -186,3 +189,55 @@ def test_load_rejects_a_file_that_is_not_a_configuration(tmp_path):
 
     with pytest.raises(ConfigError):
         Config.load(path)
+
+
+def test_default_period_is_five_seconds():
+    """UC4-R6: an agent that is not told otherwise waits five seconds."""
+    assert Config().zabbix.period == DEFAULT_PERIOD == 5
+
+
+def test_period_survives_a_round_trip(tmp_path):
+    """UC2-R1: the period is stored and read back like the rest."""
+    path = tmp_path / "config.json"
+    Config(zabbix=ZabbixConfig(period=42)).store(path)
+
+    assert Config.load(path).zabbix.period == 42
+
+
+@pytest.mark.parametrize("period", [MIN_PERIOD, 6, 60, MAX_PERIOD])
+def test_period_inside_the_range_is_accepted(period):
+    """UC4-R6: five to a hundred and twenty seconds are what may be set."""
+    Config(zabbix=ZabbixConfig(period=period)).validate()
+
+
+@pytest.mark.parametrize("period", [0, 4, 121, 3600, -5])
+def test_period_outside_the_range_is_rejected(period):
+    """UC4-R6: anything else is refused, like the other ranges."""
+    with pytest.raises(ConfigError, match="period"):
+        Config(zabbix=ZabbixConfig(period=period)).validate()
+
+
+def test_period_that_is_not_a_whole_number_is_rejected():
+    with pytest.raises(ConfigError):
+        Config(zabbix=ZabbixConfig(period="5")).validate()
+
+
+def test_a_configuration_written_before_the_period_existed_still_loads(tmp_path):
+    """UC2-R7: updating the agent must not break the file already in ProgramData.
+
+    jsonpickle never calls __init__, so a file from an older agent simply has no
+    period in it; reading it would raise AttributeError.
+    """
+    import json
+
+    path = tmp_path / "config.json"
+    make_config().store(path)
+
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    del stored["zabbix"]["period"]
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+    loaded = Config.load(path)
+
+    assert loaded.zabbix.period == DEFAULT_PERIOD
+    loaded.validate()

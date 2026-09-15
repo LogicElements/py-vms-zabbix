@@ -66,3 +66,7 @@ metriku odeslat nemůže:
 Tyhle chyby najdete v logu a v Event Logu. V Zabbixu se projeví jen nepřímo, triggerem
 „Z hostu nepřišla žádná hodnota 5m“ — proto má tento trigger vyšší prioritu než hlášená
 chyba: mlčící host může znamenat, že agent vůbec neběží.
+
+Trigger má pevné okno 5 minut, kdežto prodleva mezi cykly se nastavuje v konfiguraci
+(5 až 120 sekund). Při krátké prodlevě se do okna vejde mnoho cyklů, při prodlevě 120 s
+už jen dva a půl — počítejte s tím, že při dlouhých prodlevách trigger reaguje citlivěji.

@@ -73,6 +73,13 @@ a `vms.agent_error` collector neplní, pocházejí z vlastního stavu agenta (et
 5. Ošetřit výjimky jednoho cyklu tak, aby smyčka pokračovala dalším cyklem.
 6. Napsat testy proti podvrženým objektům: složení názvu hostu, odeslání na adresu a port z konfigurace, pokračování smyčky po výjimce v cyklu, prodleva mezi cykly.
 
+**Doplněno po dokončení etapy:** prodleva mezi cykly se nastavuje v konfiguraci
+(`ZabbixConfig.period`, 5 až 120 sekund, výchozí 5), takže UC4-R6 i UC2-R2 mají upravené DoD.
+Pozor na `jsonpickle`: ten při načtení nevolá `__init__`, takže konfiguraci zapsané starší
+verzí agenta nové pole prostě chybí a její čtení by skončilo `AttributeError`. Řeší to
+`Config.fill_missing()`, které chybějícím polím doplní výchozí hodnoty – stejným způsobem se
+přidají i pole příští.
+
 **Poznámka k dokončení:** UC1-R4 zůstává ve stavu Zbývá – smyčka chybu cyklu přežije a je to
 otestované, ale DoD mluví o stavu služby RUNNING, což jde ověřit až v etapě 4. Po chybě cyklu
 se zahodí databázové spojení, takže další cyklus navazuje na čerstvé. Odeslání na živý Zabbix

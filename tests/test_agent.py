@@ -125,13 +125,28 @@ def test_collected_values_are_the_ones_sent():
 
 
 def test_loop_waits_five_seconds_between_cycles():
-    """UC4-R6: five seconds pass between the cycles."""
+    """UC4-R6: five seconds pass between the cycles unless told otherwise."""
     agent, clock = make_agent(cycles=3)
 
     agent.run()
 
     assert clock.delays == [CYCLE_DELAY, CYCLE_DELAY, CYCLE_DELAY]
     assert CYCLE_DELAY == 5
+
+
+def test_loop_waits_what_the_configuration_says():
+    """UC4-R6: the period comes from the configuration, not from a constant."""
+    config = Config(zabbix=ZabbixConfig(location="Praha", period=45),
+                    turbines=[Turbine(name="TG1", system_id=11)])
+    holder = []
+    clock = FakeClock(holder, cycles=2)
+    agent = Agent(config, collector=FakeCollector(), sender=FakeSender(), sleep=clock)
+    holder.append(agent)
+
+    agent.run()
+
+    assert agent.period == 45
+    assert clock.delays == [45, 45]
 
 
 def test_loop_repeats_the_cycle():

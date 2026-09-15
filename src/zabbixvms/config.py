@@ -19,6 +19,11 @@ MIN_TURBINES = 1
 MAX_TURBINES = 4
 MAX_BUFFERS = 2
 
+# Seconds between the end of one measurement cycle and the start of the next.
+DEFAULT_PERIOD = 5
+MIN_PERIOD = 5
+MAX_PERIOD = 120
+
 
 class ConfigError(Exception):
     """Configuration cannot be read or holds values outside the allowed ranges."""
@@ -28,11 +33,13 @@ class ZabbixConfig:
     """Where the collected metrics are sent and under which location."""
 
     def __init__(self, server: str = "zabbix.logicelements.cz", port: int = 10051,
-                 location: str = "") -> None:
+                 location: str = "", period: int = DEFAULT_PERIOD) -> None:
         self.server = server
         self.port = port
         # Prefix of the Zabbix host name, joined with the turbine name by an underscore.
         self.location = location
+        # Seconds waited between measurement cycles.
+        self.period = period
 
 
 class DatabaseConfig:
@@ -83,8 +90,26 @@ class Config:
                 f"configuration has {count} turbines, "
                 f"{MIN_TURBINES} to {MAX_TURBINES} are supported"
             )
+        period = self.zabbix.period
+        if not isinstance(period, int) or period < MIN_PERIOD or period > MAX_PERIOD:
+            raise ConfigError(
+                f"period is {period!r} seconds, "
+                f"{MIN_PERIOD} to {MAX_PERIOD} are supported"
+            )
         for turbine in self.turbines:
             turbine.validate()
+
+    def fill_missing(self) -> "Config":
+        """Give values to what a configuration written by an older agent lacks.
+
+        jsonpickle restores the attributes the file holds and never calls __init__,
+        so a file from before a field existed would leave it missing altogether and
+        reading it would raise AttributeError. An agent that is updated has to keep
+        working with the configuration that is already in ProgramData.
+        """
+        if not hasattr(self.zabbix, "period"):
+            self.zabbix.period = DEFAULT_PERIOD
+        return self
 
     @staticmethod
     def load(path: os.PathLike | str) -> "Config":
@@ -99,7 +124,7 @@ class Config:
         config = jsonpickle.decode(text, keys=True)
         if not isinstance(config, Config):
             raise ConfigError(f"{path} does not hold a configuration")
-        return config
+        return config.fill_missing()
 
     def store(self, path: os.PathLike | str) -> None:
         """Write the configuration as JSON with the jsonpickle type tags."""
