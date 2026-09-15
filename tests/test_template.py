@@ -31,6 +31,29 @@ def template_of(export):
     return export["zabbix_export"]["templates"][0]
 
 
+def exported_triggers():
+    """Every trigger of the shipped template, read from inside its items."""
+    return [trigger for item in template_of(exported())["items"]
+            for trigger in item.get("triggers", [])]
+
+
+def test_triggers_sit_inside_their_items():
+    """An export has no triggers section of its own; the import refuses one."""
+    template = template_of(exported())
+
+    assert "triggers" not in template
+    keys_with_triggers = {item["key"] for item in template["items"]
+                          if item.get("triggers")}
+    assert keys_with_triggers == {"vms.agent_status", "vms.agent_error"}
+
+
+def test_each_trigger_sits_under_an_item_its_expression_reads():
+    """Zabbix places a trigger under the item it refers to."""
+    for item in template_of(exported())["items"]:
+        for trigger in item.get("triggers", []):
+            assert f"/{TEMPLATE_NAME}/{item['key']}" in trigger["expression"]
+
+
 def test_the_file_in_the_package_is_what_the_generator_builds():
     """The shipped template cannot go stale against the catalog."""
     assert template_path().read_text(encoding="utf-8") == to_yaml()
@@ -110,19 +133,19 @@ def test_the_status_item_uses_that_value_map():
 
 def test_there_are_three_triggers():
     """UC5-R4: the template brings the three triggers, no more."""
-    assert len(template_of(exported())["triggers"]) == 3
+    assert len(exported_triggers()) == 3
 
 
 def test_trigger_on_a_status_above_zero():
     """UC5-R4: a state other than 0 fires."""
-    expressions = [t["expression"] for t in template_of(exported())["triggers"]]
+    expressions = [t["expression"] for t in exported_triggers()]
 
     assert f"last(/{TEMPLATE_NAME}/vms.agent_status)>0" in expressions
 
 
 def test_trigger_on_a_non_empty_error_carries_the_text_in_its_name():
     """UC5-R4: the text of the error is part of the name of the trigger."""
-    triggers = {t["expression"]: t for t in template_of(exported())["triggers"]}
+    triggers = {t["expression"]: t for t in exported_triggers()}
     trigger = triggers[f"length(last(/{TEMPLATE_NAME}/vms.agent_error))>0"]
 
     assert "{ITEM.VALUE}" in trigger["name"]
@@ -130,7 +153,7 @@ def test_trigger_on_a_non_empty_error_carries_the_text_in_its_name():
 
 def test_trigger_on_no_data_for_five_minutes():
     """UC5-R4: silence of five minutes fires too, which covers an agent that is down."""
-    expressions = [t["expression"] for t in template_of(exported())["triggers"]]
+    expressions = [t["expression"] for t in exported_triggers()]
 
     assert f"nodata(/{TEMPLATE_NAME}/vms.agent_status,{NO_DATA_PERIOD})=1" in expressions
     assert NO_DATA_PERIOD == "5m"
@@ -143,7 +166,7 @@ def test_every_exported_object_has_a_uuid():
 
     assert export["zabbix_export"][groups_section()][0]["uuid"]
     assert template["uuid"]
-    for group in (template["items"], template["triggers"], template["valuemaps"]):
+    for group in (template["items"], exported_triggers(), template["valuemaps"]):
         for entry in group:
             assert len(entry["uuid"]) == 32
 

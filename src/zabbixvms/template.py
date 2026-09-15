@@ -79,36 +79,54 @@ def item(metric) -> dict:
         entry["units"] = metric.units
     if metric.key == "vms.agent_status":
         entry["valuemap"] = {"name": STATUS_VALUE_MAP}
+    item_triggers = triggers_of(metric.key)
+    if item_triggers:
+        entry["triggers"] = item_triggers
     return entry
 
 
-def triggers() -> list[dict]:
-    """The three triggers that turn the agent's own state into an alert."""
+def triggers_of(key: str) -> list[dict]:
+    """Triggers that belong under the item of that key.
+
+    An export carries a trigger inside the item its expression reads, not beside the
+    items; a template with a triggers section of its own is refused on import.
+    """
     status = f"/{TEMPLATE_NAME}/vms.agent_status"
     error = f"/{TEMPLATE_NAME}/vms.agent_error"
-    return [
-        {
-            "uuid": stable_uuid("trigger:status"),
-            "expression": f"last({status})>0",
-            "name": "Agent hlásí chybu nebo varování",
-            "priority": "WARNING",
-            "description": "Stav agenta je jiný než 0; popis nese vms.agent_error.",
-        },
-        {
-            "uuid": stable_uuid("trigger:error"),
-            "expression": f"length(last({error}))>0",
-            "name": "Chyba agenta: {ITEM.VALUE}",
-            "priority": "WARNING",
-            "description": "Agent hlásí text chyby nebo varování.",
-        },
-        {
-            "uuid": stable_uuid("trigger:nodata"),
-            "expression": f"nodata({status},{NO_DATA_PERIOD})=1",
-            "name": f"Z hostu nepřišla žádná hodnota {NO_DATA_PERIOD}",
-            "priority": "AVERAGE",
-            "description": "Agent neběží, nebo se nedostane k databázi či k Zabbixu.",
-        },
-    ]
+    by_item = {
+        "vms.agent_status": [
+            {
+                "uuid": stable_uuid("trigger:status"),
+                "expression": f"last({status})>0",
+                "name": "Agent hlásí chybu nebo varování",
+                "priority": "WARNING",
+                "description": "Stav agenta je jiný než 0; popis nese vms.agent_error.",
+            },
+            {
+                "uuid": stable_uuid("trigger:nodata"),
+                "expression": f"nodata({status},{NO_DATA_PERIOD})=1",
+                "name": f"Z hostu nepřišla žádná hodnota {NO_DATA_PERIOD}",
+                "priority": "AVERAGE",
+                "description": "Agent neběží, nebo se nedostane k databázi či k Zabbixu.",
+            },
+        ],
+        "vms.agent_error": [
+            {
+                "uuid": stable_uuid("trigger:error"),
+                "expression": f"length(last({error}))>0",
+                "name": "Chyba agenta: {ITEM.VALUE}",
+                "priority": "WARNING",
+                "description": "Agent hlásí text chyby nebo varování.",
+            },
+        ],
+    }
+    return by_item.get(key, [])
+
+
+def all_triggers() -> list[dict]:
+    """Every trigger of the template, wherever in the export it sits."""
+    return [trigger for metric in metrics.METRICS
+            for trigger in triggers_of(metric.key)]
 
 
 def build() -> dict:
@@ -135,7 +153,6 @@ def build() -> dict:
                                          for value, text in STATUS_MAPPINGS],
                         },
                     ],
-                    "triggers": triggers(),
                 },
             ],
         },
