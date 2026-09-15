@@ -177,5 +177,20 @@ def test_uuids_stay_the_same_between_generations():
     assert stable_uuid("item:vms.speed") != stable_uuid("item:vms.info_age")
 
 
+def test_every_uuid_is_version_four():
+    """Zabbix refuses anything else: Invalid parameter "/1/uuid": UUIDv4 is expected."""
+    import uuid as uuid_module
+
+    export = exported()
+    template = template_of(export)
+    everything = ([export["zabbix_export"][groups_section()][0], template]
+                  + template["items"] + exported_triggers() + template["valuemaps"])
+
+    for entry in everything:
+        parsed = uuid_module.UUID(entry["uuid"])
+        assert parsed.version == 4, entry.get("key") or entry.get("name")
+        assert parsed.variant == uuid_module.RFC_4122
+
+
 def test_building_twice_gives_the_same_template():
     assert build() == build()

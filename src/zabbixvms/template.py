@@ -50,8 +50,16 @@ NO_DATA_PERIOD = "5m"
 
 
 def stable_uuid(name: str) -> str:
-    """Uuid of an exported object, the same for the same name every time."""
-    return uuid.uuid5(UUID_NAMESPACE, name).hex
+    """Uuid of an exported object, the same for the same name every time.
+
+    Zabbix insists on a version 4 uuid, which is normally a random one. The value is
+    derived from the name so that it does not change between generations, and then
+    the version and variant bits are set to what a version 4 uuid carries.
+    """
+    raw = bytearray(uuid.uuid5(UUID_NAMESPACE, name).bytes)
+    raw[6] = (raw[6] & 0x0F) | 0x40
+    raw[8] = (raw[8] & 0x3F) | 0x80
+    return uuid.UUID(bytes=bytes(raw)).hex
 
 
 def groups_section(version: str = EXPORT_VERSION) -> str:
