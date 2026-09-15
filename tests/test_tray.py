@@ -260,6 +260,54 @@ def test_solid_icon_really_builds_an_icon():
     assert handle
 
 
+def painted_pixels(color):
+    """Colours of every pixel of the icon painted in the given colour."""
+    import win32api
+    import win32gui
+    import win32ui
+
+    size = tray_module.ICON_SIZE
+    screen = win32gui.GetDC(0)
+    try:
+        screen_dc = win32ui.CreateDCFromHandle(screen)
+        memory_dc = screen_dc.CreateCompatibleDC()
+        bitmap = win32ui.CreateBitmap()
+        bitmap.CreateCompatibleBitmap(screen_dc, size, size)
+        memory_dc.SelectObject(bitmap)
+        tray_module.paint_icon(memory_dc, color)
+        return [memory_dc.GetPixel(x, y)
+                for y in range(size) for x in range(size)], win32api.RGB
+    finally:
+        win32gui.ReleaseDC(0, screen)
+
+
+def test_letter_is_painted_in_the_middle_of_the_icon():
+    """The icon carries the letter, so it is not just a coloured square."""
+    pixels, rgb = painted_pixels(RUNNING_COLOR)
+
+    letter = rgb(*tray_module.LETTER_COLOR)
+    assert tray_module.ICON_LETTER == "Z"
+    assert pixels.count(letter) > 5
+
+    # The letter sits in the middle: the outermost rows carry none of it.
+    size = tray_module.ICON_SIZE
+    rows = [pixels[y * size:(y + 1) * size] for y in range(size)]
+    assert letter not in rows[0]
+    assert letter not in rows[-1]
+
+
+def test_letter_stands_out_against_both_colours():
+    """Whatever the state, the letter is a different colour than the square."""
+    import win32api
+
+    assert tray_module.LETTER_COLOR != RUNNING_COLOR
+    assert tray_module.LETTER_COLOR != STOPPED_COLOR
+    for background in (RUNNING_COLOR, STOPPED_COLOR):
+        pixels, rgb = painted_pixels(background)
+        assert rgb(*background) in pixels
+        assert win32api.RGB(*tray_module.LETTER_COLOR) in pixels
+
+
 @pytest.mark.gui
 def test_icon_is_really_created_and_removed():
     """The window, the systray icon and the timer are built with the real API.

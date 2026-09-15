@@ -42,6 +42,11 @@ STOPPED_COLOR = (208, 48, 48)
 
 ICON_SIZE = 16
 
+# The letter in the middle of the icon, so it is not just a coloured square.
+ICON_LETTER = "Z"
+LETTER_COLOR = (255, 255, 255)
+LETTER_FONT = "Segoe UI"
+
 # Items of the context menu, in order, each with the method that carries it out.
 MENU = (
     ("Spustit", "start_service"),
@@ -157,8 +162,24 @@ class _Unknown:
 _UNKNOWN = _Unknown()
 
 
+def paint_icon(memory_dc, color: tuple[int, int, int], letter: str = ICON_LETTER,
+               size: int = ICON_SIZE) -> None:
+    """Fill the square with the colour and put the letter in the middle of it."""
+    brush = win32ui.CreateBrush(win32con.BS_SOLID, win32api.RGB(*color), 0)
+    memory_dc.FillRect((0, 0, size, size), brush)
+
+    if not letter:
+        return
+    font = win32ui.CreateFont({"name": LETTER_FONT, "height": size, "weight": 700})
+    memory_dc.SelectObject(font)
+    memory_dc.SetBkMode(win32con.TRANSPARENT)
+    memory_dc.SetTextColor(win32api.RGB(*LETTER_COLOR))
+    memory_dc.DrawText(letter, (0, 0, size, size),
+                       win32con.DT_CENTER | win32con.DT_VCENTER | win32con.DT_SINGLELINE)
+
+
 def solid_icon(color: tuple[int, int, int], size: int = ICON_SIZE):
-    """Handle of a square icon filled with one colour."""
+    """Handle of the icon: a square of the given colour with the letter on it."""
     screen = win32gui.GetDC(0)
     screen_dc = win32ui.CreateDCFromHandle(screen)
     try:
@@ -166,8 +187,7 @@ def solid_icon(color: tuple[int, int, int], size: int = ICON_SIZE):
         bitmap = win32ui.CreateBitmap()
         bitmap.CreateCompatibleBitmap(screen_dc, size, size)
         memory_dc.SelectObject(bitmap)
-        brush = win32ui.CreateBrush(win32con.BS_SOLID, win32api.RGB(*color), 0)
-        memory_dc.FillRect((0, 0, size, size), brush)
+        paint_icon(memory_dc, color, size=size)
 
         # A monochrome mask of zeros keeps the whole square opaque.
         mask = win32gui.CreateBitmap(size, size, 1, 1, None)
