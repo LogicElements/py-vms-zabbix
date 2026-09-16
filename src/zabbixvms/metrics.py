@@ -63,48 +63,26 @@ METRICS = (
                     "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
-        key="vms.buf_rows_1",
-        name="Počet řádků v bufferu 1",
+        key="vms.buf_rows",
+        name="Počet řádků v bufferech",
         value_type=ValueType.UNSIGNED,
         units="",
-        description="Počet řádků v první bufferové tabulce",
+        description="Součet počtu řádků přes bufferové tabulky turbíny",
     ),
     Metric(
-        key="vms.buf_rows_2",
-        name="Počet řádků v bufferu 2",
-        value_type=ValueType.UNSIGNED,
-        units="",
-        description="Počet řádků v druhé bufferové tabulce",
-    ),
-    Metric(
-        key="vms.buf_age_1",
-        name="Stáří bufferu 1",
+        key="vms.buf_age",
+        name="Stáří bufferů",
         value_type=ValueType.UNSIGNED,
         units="s",
-        description="Doba od posledních dat přijatých do bufferu 1. "
-                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
+        description="Doba od posledních dat přijatých do toho bufferu turbíny, který je "
+                    "na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
     Metric(
-        key="vms.buf_age_2",
-        name="Stáří bufferu 2",
-        value_type=ValueType.UNSIGNED,
-        units="s",
-        description="Doba od posledních dat přijatých do bufferu 2. "
-                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
-    ),
-    Metric(
-        key="vms.buf_bulk_1",
-        name="Doba bulk zápisu 1",
+        key="vms.buf_bulk",
+        name="Doba bulk zápisu",
         value_type=ValueType.UNSIGNED,
         units="ms",
-        description="Doba zápisu bulk příkazu do databáze pro buffer 1",
-    ),
-    Metric(
-        key="vms.buf_bulk_2",
-        name="Doba bulk zápisu 2",
-        value_type=ValueType.UNSIGNED,
-        units="ms",
-        description="Doba zápisu bulk příkazu do databáze pro buffer 2",
+        description="Součet doby zápisu bulk příkazů do databáze přes buffery turbíny",
     ),
     Metric(
         key="vms.agent_status",

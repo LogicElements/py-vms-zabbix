@@ -42,47 +42,26 @@ zabbix_export:
       description: Doba od posledních přijatých konfiguračních dat. Hodnoty nad jeden měsíc se hlásí jako
         jeden měsíc.
       units: s
-    - uuid: 1be3a968357b42bfad694d2885f54863
-      name: Počet řádků v bufferu 1
+    - uuid: 98706240c28143d68625ee59fde5804f
+      name: Počet řádků v bufferech
       type: TRAP
-      key: vms.buf_rows_1
+      key: vms.buf_rows
       value_type: UNSIGNED
-      description: Počet řádků v první bufferové tabulce
-    - uuid: 9a63f827e6a845549fee118f385b2dfc
-      name: Počet řádků v bufferu 2
+      description: Součet počtu řádků přes bufferové tabulky turbíny
+    - uuid: 1d6bbea0f0dd42d7aef8d9cd9b2dff5b
+      name: Stáří bufferů
       type: TRAP
-      key: vms.buf_rows_2
+      key: vms.buf_age
       value_type: UNSIGNED
-      description: Počet řádků v druhé bufferové tabulce
-    - uuid: 4ef48f4ba2864fbeb5a94c664e8220de
-      name: Stáří bufferu 1
-      type: TRAP
-      key: vms.buf_age_1
-      value_type: UNSIGNED
-      description: Doba od posledních dat přijatých do bufferu 1. Hodnoty nad jeden měsíc se hlásí jako
-        jeden měsíc.
+      description: Doba od posledních dat přijatých do toho bufferu turbíny, který je na tom nejhůř. Hodnoty
+        nad jeden měsíc se hlásí jako jeden měsíc.
       units: s
-    - uuid: 00dbc7d424f047faaacef40d83cd2e4f
-      name: Stáří bufferu 2
+    - uuid: 849b5bbd3365482fa084617078b280c5
+      name: Doba bulk zápisu
       type: TRAP
-      key: vms.buf_age_2
+      key: vms.buf_bulk
       value_type: UNSIGNED
-      description: Doba od posledních dat přijatých do bufferu 2. Hodnoty nad jeden měsíc se hlásí jako
-        jeden měsíc.
-      units: s
-    - uuid: 56ebce1768864dd2996bc10b4f878b2b
-      name: Doba bulk zápisu 1
-      type: TRAP
-      key: vms.buf_bulk_1
-      value_type: UNSIGNED
-      description: Doba zápisu bulk příkazu do databáze pro buffer 1
-      units: ms
-    - uuid: d4506d28a9ab4d75bf883564ed4e7229
-      name: Doba bulk zápisu 2
-      type: TRAP
-      key: vms.buf_bulk_2
-      value_type: UNSIGNED
-      description: Doba zápisu bulk příkazu do databáze pro buffer 2
+      description: Součet doby zápisu bulk příkazů do databáze přes buffery turbíny
       units: ms
     - uuid: aceaa39a77be47c5acfe687fdc0cfdef
       name: Stav agenta

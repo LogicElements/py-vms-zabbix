@@ -162,18 +162,24 @@ class Collector:
             "vms.config_age": age(info["Date_Config"], now),
         }
 
-        # Both buffers are always sent. Which info columns a buffer uses follows its
-        # position, not the table name in the configuration.
+        # The buffers are summed up into one metric each. Rows and bulk time add up;
+        # the age is the worst of them, because summing two ages gives a number that
+        # is the age of nothing. A buffer the turbine does not have contributes
+        # nothing, so a turbine with one buffer reports exactly that one. Which info
+        # columns a buffer uses follows its position, not the table name in the
+        # configuration.
+        rows = bulk = oldest = NO_BUFFER
         for index in (1, 2):
             if len(turbine.buffers) < index:
-                values[f"vms.buf_age_{index}"] = NO_BUFFER
-                values[f"vms.buf_bulk_{index}"] = NO_BUFFER
-                values[f"vms.buf_rows_{index}"] = NO_BUFFER
                 continue
             table = turbine.buffers[index - 1]
-            values[f"vms.buf_age_{index}"] = age(info[f"Date_Buffer_{index}"], now)
-            values[f"vms.buf_bulk_{index}"] = info[f"Time_bulk_{index}"] or 0
-            values[f"vms.buf_rows_{index}"] = buffer_rows.get(table, 0)
+            oldest = max(oldest, age(info[f"Date_Buffer_{index}"], now))
+            bulk += info[f"Time_bulk_{index}"] or 0
+            rows += buffer_rows.get(table, 0)
+
+        values["vms.buf_rows"] = rows
+        values["vms.buf_age"] = oldest
+        values["vms.buf_bulk"] = bulk
 
         return values
 

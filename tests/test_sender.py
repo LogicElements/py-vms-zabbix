@@ -74,11 +74,11 @@ def test_values_are_sent_under_the_host_of_the_turbine():
     sender, created = make_sender(ZabbixConfig(location="Praha"))
     turbine = Turbine(name="TG1", system_id=11)
 
-    sender.send(turbine, {"vms.speed": 3000.5, "vms.buf_rows_1": 42})
+    sender.send(turbine, {"vms.speed": 3000.5, "vms.buf_rows": 42})
 
     items = created[0].sent[0]
     assert [item.host for item in items] == ["Praha_TG1", "Praha_TG1"]
-    assert [item.key for item in items] == ["vms.speed", "vms.buf_rows_1"]
+    assert [item.key for item in items] == ["vms.speed", "vms.buf_rows"]
     assert [item.value for item in items] == ["3000.5", "42"]
 
 

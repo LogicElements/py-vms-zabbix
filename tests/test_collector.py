@@ -160,12 +160,10 @@ def test_values_follow_the_source_table():
     assert values["vms.info_age"] == 3
     assert values["vms.timestamp_age"] == 5
     assert values["vms.config_age"] == 7
-    assert values["vms.buf_age_1"] == 11
-    assert values["vms.buf_age_2"] == 13
-    assert values["vms.buf_bulk_1"] == 17
-    assert values["vms.buf_bulk_2"] == 19
-    assert values["vms.buf_rows_1"] == 157062
-    assert values["vms.buf_rows_2"] == 58043
+    # Ages 11 and 13, bulk 17 and 19, rows 157062 and 58043 over the two buffers.
+    assert values["vms.buf_age"] == 13
+    assert values["vms.buf_bulk"] == 36
+    assert values["vms.buf_rows"] == 215105
 
 
 def test_one_cycle_uses_a_single_measurement_time():
@@ -182,31 +180,52 @@ def test_one_cycle_uses_a_single_measurement_time():
     assert values["vms.config_age"] == 1
 
 
-def test_unconfigured_second_buffer_is_zero():
-    """UC3-R3, UC4-R5: metrics of a buffer the turbine does not have are 0."""
+def test_one_buffer_reports_exactly_that_one():
+    """UC3-R3: a buffer the turbine does not have adds nothing to the sums."""
     turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_le"])
     connection = FakeConnection(info_rows=[info_row(SystemId=11)],
                                 table_rows={"buffer_le": 157062})
 
     values = make_collector(connection).collect(turbine, NOW)
 
-    assert values["vms.buf_rows_1"] == 157062
-    assert values["vms.buf_age_1"] == 11
-    assert values["vms.buf_bulk_1"] == 17
-    assert values["vms.buf_rows_2"] == 0
-    assert values["vms.buf_age_2"] == 0
-    assert values["vms.buf_bulk_2"] == 0
+    assert values["vms.buf_rows"] == 157062
+    assert values["vms.buf_age"] == 11
+    assert values["vms.buf_bulk"] == 17
 
 
-def test_turbine_without_buffers_has_both_buffers_zero():
-    """UC3-R3: both buffers are still sent, with zeros."""
+def test_age_is_the_worst_of_the_buffers_not_their_sum():
+    """UC4-R5: two ages added up would be the age of nothing."""
+    row = info_row(SystemId=11, Date_Buffer_1=NOW - timedelta(seconds=11),
+                   Date_Buffer_2=NOW - timedelta(seconds=13))
+    turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_le", "buffer_le_3"])
+    connection = FakeConnection(info_rows=[row],
+                                table_rows={"buffer_le": 1, "buffer_le_3": 2})
+
+    values = make_collector(connection).collect(turbine, NOW)
+
+    assert values["vms.buf_age"] == 13
+
+
+def test_the_older_buffer_wins_whichever_position_it_has():
+    """The worst buffer decides, no matter which of the two it is."""
+    row = info_row(SystemId=11, Date_Buffer_1=NOW - timedelta(seconds=99),
+                   Date_Buffer_2=NOW - timedelta(seconds=2))
+    turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_le", "buffer_le_3"])
+    connection = FakeConnection(info_rows=[row], table_rows={})
+
+    values = make_collector(connection).collect(turbine, NOW)
+
+    assert values["vms.buf_age"] == 99
+
+
+def test_turbine_without_buffers_reports_zero():
+    """UC3-R3: the three buffer metrics are still sent, as zeros."""
     turbine = Turbine(name="TG1", system_id=11, buffers=[])
     connection = FakeConnection(info_rows=[info_row(SystemId=11)])
 
     values = make_collector(connection).collect(turbine, NOW)
 
-    for key in ("vms.buf_rows_1", "vms.buf_age_1", "vms.buf_bulk_1",
-                "vms.buf_rows_2", "vms.buf_age_2", "vms.buf_bulk_2"):
+    for key in ("vms.buf_rows", "vms.buf_age", "vms.buf_bulk"):
         assert values[key] == 0
 
 
@@ -218,10 +237,11 @@ def test_buffer_table_name_does_not_choose_the_info_columns():
 
     values = make_collector(connection).collect(turbine, NOW)
 
-    assert values["vms.buf_age_1"] == 11
-    assert values["vms.buf_age_2"] == 13
-    assert values["vms.buf_rows_1"] == 58043
-    assert values["vms.buf_rows_2"] == 157062
+    # Swapping the names in the configuration changes neither the columns the age
+    # and the bulk come from nor the sums, which cover both tables anyway.
+    assert values["vms.buf_age"] == 13
+    assert values["vms.buf_bulk"] == 36
+    assert values["vms.buf_rows"] == 215105
 
 
 def test_missing_buffer_table_counts_no_rows():
@@ -231,7 +251,7 @@ def test_missing_buffer_table_counts_no_rows():
 
     values = make_collector(connection).collect(turbine, NOW)
 
-    assert values["vms.buf_rows_1"] == 0
+    assert values["vms.buf_rows"] == 0
 
 
 def test_missing_buffer_table_is_worth_a_warning():

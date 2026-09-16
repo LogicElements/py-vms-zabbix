@@ -22,13 +22,13 @@
 | UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Hotovo | tests/test_tray.py |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
-| UC3-R3 | Metriky bufferů podle počtu nastavených bufferů turbíny | Hotovo | tests/test_collector.py |
+| UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
 | UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Hotovo | tests/test_template.py |
 | UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Hotovo | tests/test_collector.py |
 | UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Hotovo | tests/test_collector_db.py |
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
 | UC4-R4 | Stáří v celých sekundách proti času měření, saturované na jeden měsíc | Hotovo | tests/test_collector.py |
-| UC4-R5 | Buffery: stáří a bulk z pevných pozic, počet řádků podle názvu tabulky | Hotovo | tests/test_collector.py |
+| UC4-R5 | Buffery: stáří jako maximum, bulk a řádky jako součet přes nastavené buffery | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva mezi cykly měření nastavitelná v rozsahu 5 až 120 sekund | Hotovo | tests/test_agent.py |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
@@ -202,12 +202,9 @@ Sada metrik odesílaných do Zabbixu:
 | `vms.info_age` | Stáří info záznamu | Numeric (unsigned) | s | Doba od poslední aktualizace tabulky `info`. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
 | `vms.timestamp_age` | Stáří timestamp dat | Numeric (unsigned) | s | Doba od posledních přijatých timestamp dat. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
 | `vms.config_age` | Stáří konfiguračních dat | Numeric (unsigned) | s | Doba od posledních přijatých konfiguračních dat. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
-| `vms.buf_rows_1` | Počet řádků v bufferu 1 | Numeric (unsigned) | | Počet řádků v první bufferové tabulce |
-| `vms.buf_rows_2` | Počet řádků v bufferu 2 | Numeric (unsigned) | | Počet řádků v druhé bufferové tabulce |
-| `vms.buf_age_1` | Stáří bufferu 1 | Numeric (unsigned) | s | Doba od posledních dat přijatých do bufferu 1. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
-| `vms.buf_age_2` | Stáří bufferu 2 | Numeric (unsigned) | s | Doba od posledních dat přijatých do bufferu 2. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
-| `vms.buf_bulk_1` | Doba bulk zápisu 1 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 1 |
-| `vms.buf_bulk_2` | Doba bulk zápisu 2 | Numeric (unsigned) | ms | Doba zápisu bulk příkazu do databáze pro buffer 2 |
+| `vms.buf_rows` | Počet řádků v bufferech | Numeric (unsigned) | | Součet počtu řádků přes bufferové tabulky turbíny |
+| `vms.buf_age` | Stáří bufferů | Numeric (unsigned) | s | Doba od posledních dat přijatých do toho bufferu turbíny, který je na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
+| `vms.buf_bulk` | Doba bulk zápisu | Numeric (unsigned) | ms | Součet doby zápisu bulk příkazů do databáze přes buffery turbíny |
 | `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`. |
 | `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku. |
 
@@ -227,11 +224,11 @@ Sada metrik odesílaných do Zabbixu:
 - Typ položky se v tabulce neuvádí, protože všechny metriky jsou položky typu Zabbix trapper.
 
 ### UC3-R3
-**Popis:** Metriky obou bufferů se odesílají vždy; u bufferu, který turbína nemá nastavený, mají hodnotu 0.
+**Popis:** Metriky bufferů jsou souhrnem přes bufferové tabulky turbíny, ne metrikou každé z nich.
 **DoD:**
-- Agent odesílá metriky obou bufferů pro každou turbínu, bez ohledu na počet bufferových tabulek nastavených u turbíny.
-- Metriky bufferu, který turbína nemá nastavený, mají hodnotu 0 – tedy u turbíny s jednou bufferovou tabulkou metriky druhého bufferu a u turbíny bez bufferové tabulky metriky obou.
-- Klíč metriky rozlišuje, ke kterému z bufferů hodnota patří.
+- Agent odesílá tři metriky bufferů – počet řádků, stáří a dobu bulk zápisu – bez ohledu na to, kolik bufferových tabulek má turbína nastavených.
+- Počet řádků a doba bulk zápisu jsou součtem přes nastavené buffery, stáří je největší ze stáří nastavených bufferů.
+- Buffer, který turbína nemá nastavený, do souhrnu nevstupuje; turbína s jednou bufferovou tabulkou proto hlásí hodnoty právě té jedné a turbína bez bufferu hlásí u všech tří metrik 0.
 
 ### UC3-R4  
 **Popis:** Balíček obsahuje šablonu pro Zabbix odpovídající tabulce metrik a dokumentace obsahuje návod, podle kterého ji obsluha před nasazením do Zabbixu naimportuje.
@@ -259,12 +256,9 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 | `vms.info_age` | řádek `info` turbíny | `info`, `system_id` | `Date` | celé sekundy mezi `Date` a časem měření |
 | `vms.timestamp_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Timestamp` | celé sekundy mezi `Date_Timestamp` a časem měření |
 | `vms.config_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Config` | celé sekundy mezi `Date_Config` a časem měření |
-| `vms.buf_age_1` | řádek `info` turbíny | `info`, `system_id` | `Date_Buffer_1` | celé sekundy mezi `Date_Buffer_1` a časem měření |
-| `vms.buf_age_2` | řádek `info` turbíny | `info`, `system_id` | `Date_Buffer_2` | celé sekundy mezi `Date_Buffer_2` a časem měření |
-| `vms.buf_bulk_1` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_1` | přímo hodnota |
-| `vms.buf_bulk_2` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_2` | přímo hodnota |
-| `vms.buf_rows_1` | `information_schema.TABLES` | `database`, první bufferová tabulka turbíny | `TABLE_ROWS` | přímo hodnota |
-| `vms.buf_rows_2` | `information_schema.TABLES` | `database`, druhá bufferová tabulka turbíny | `TABLE_ROWS` | přímo hodnota |
+| `vms.buf_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Buffer_1`, `Date_Buffer_2` | větší ze stáří obou sloupců, přes nastavené buffery |
+| `vms.buf_bulk` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_1`, `Time_bulk_2` | součet hodnot přes nastavené buffery |
+| `vms.buf_rows` | `information_schema.TABLES` | `database`, bufferové tabulky turbíny | `TABLE_ROWS` | součet hodnot přes nastavené buffery |
 | `vms.agent_status` | vlastní stav agenta | – | – | 0, 1 nebo 2 podle průběhu cyklu |
 | `vms.agent_error` | vlastní stav agenta | – | – | text poslední chyby, jinak prázdný řetězec |
 
@@ -299,11 +293,11 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 ### UC4-R5
 **Popis:** Metriky bufferů se získávají ze dvou různých zdrojů podle toho, o kterou metriku jde.
 **DoD:**
-- `vms.buf_age_1` a `vms.buf_age_2` se počítají ze sloupců `Date_Buffer_1` a `Date_Buffer_2`, tedy z pevných pozic v informační tabulce.
-- `vms.buf_bulk_1` a `vms.buf_bulk_2` se berou ze sloupců `Time_bulk_1` a `Time_bulk_2`, rovněž z pevných pozic.
-- `vms.buf_rows_1` a `vms.buf_rows_2` se berou z `TABLE_ROWS` pro tabulku, jejíž název je první, resp. druhý v seznamu bufferů dané turbíny.
-- Název bufferové tabulky z konfigurace neovlivňuje, ze kterých sloupců informační tabulky se čte stáří a bulk.
-- Metriky bufferu, který turbína nemá nastavený, se odesílají s hodnotou 0; hodnoty ze sloupců informační tabulky se pro něj nepoužijí.
+- `vms.buf_age` je největší ze stáří spočítaných ze sloupců `Date_Buffer_1` a `Date_Buffer_2`, tedy z pevných pozic v informační tabulce.
+- `vms.buf_bulk` je součtem sloupců `Time_bulk_1` a `Time_bulk_2`, rovněž z pevných pozic.
+- `vms.buf_rows` je součtem `TABLE_ROWS` pro tabulky, jejichž názvy jsou v seznamu bufferů dané turbíny.
+- Sloupec informační tabulky patří k bufferu podle jeho pořadí v seznamu; název bufferové tabulky z konfigurace neurčuje, ze kterého sloupce se stáří a bulk čtou.
+- Buffer, který turbína nemá nastavený, do souhrnu nevstupuje; jemu odpovídající sloupce informační tabulky se nepoužijí.
 
 ### UC4-R6
 **Popis:** Agent opakuje cyklus měření s prodlevou, kterou lze nastavit v konfiguraci.

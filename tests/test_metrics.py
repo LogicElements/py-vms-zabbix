@@ -66,11 +66,13 @@ def test_keys_are_unique():
     assert len(set(metrics.KEYS)) == len(metrics.KEYS)
 
 
-def test_both_buffers_have_their_own_keys():
-    """UC3-R3: the key says which of the two buffers a value belongs to."""
+def test_the_buffers_have_one_metric_each_kind():
+    """UC3-R3: the buffers are summed into one metric each, without a suffix."""
     for name in ("rows", "age", "bulk"):
-        assert f"vms.buf_{name}_1" in metrics.KEYS
-        assert f"vms.buf_{name}_2" in metrics.KEYS
+        assert f"vms.buf_{name}" in metrics.KEYS
+
+    assert not [key for key in metrics.KEYS
+                if key.endswith(("_1", "_2"))]
 
 
 def test_catalog_splits_into_collector_and_agent_keys():
