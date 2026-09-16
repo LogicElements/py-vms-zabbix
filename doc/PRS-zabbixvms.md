@@ -343,6 +343,10 @@ Sada triggerů, které šablona obsahuje:
 
 | Název triggeru | Klíč metriky | Podmínka | Priorita |
 | --- | --- | --- | --- |
+| Chyba databáze VMS setupu | `vms.info_age` | `last({METRIC})>5m` | HIGH |
+| Chyba timestamp socketu | `vms.timestamp_age` | `last({METRIC})>5m` | HIGH |
+| Chyba konfiguračního socketu | `vms.config_age` | `last({METRIC})>5m` | HIGH |
+| Chyba SW analýzy čtení bufferu | `vms.buf_rows` | `last({METRIC})>100000` | HIGH |
 | Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | AVERAGE |
 | Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH |
 | Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE |

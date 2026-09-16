@@ -43,7 +43,7 @@ def test_triggers_sit_inside_their_items():
     assert "triggers" not in template
     keys_with_triggers = {item["key"] for item in template["items"]
                           if item.get("triggers")}
-    assert keys_with_triggers == {"vms.agent_status", "vms.agent_error"}
+    assert keys_with_triggers == {trigger.key for trigger in metrics.TRIGGERS}
 
 
 def test_each_trigger_sits_under_an_item_its_expression_reads():
@@ -130,9 +130,13 @@ def test_the_status_item_uses_that_value_map():
     assert items["vms.agent_status"]["valuemap"] == {"name": STATUS_VALUE_MAP}
 
 
-def test_there_are_three_triggers():
-    """UC5-R4: the template brings the three triggers, no more."""
-    assert len(exported_triggers()) == 3
+def test_the_template_brings_the_triggers_of_the_catalog():
+    """UC5-R4: every trigger of the table reaches the template, and no other."""
+    exported = exported_triggers()
+
+    assert len(exported) == len(metrics.TRIGGERS)
+    assert {trigger["name"] for trigger in exported} == \
+        {trigger.name for trigger in metrics.TRIGGERS}
 
 
 def test_silence_weighs_more_than_a_reported_error():
