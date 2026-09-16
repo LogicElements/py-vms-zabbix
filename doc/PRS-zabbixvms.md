@@ -11,7 +11,7 @@
 | UC1-R5 | Ikona v systray signalizující barvou stav služby | Hotovo | tests/test_tray.py |
 | UC1-R6 | Spuštění, zastavení a restart služby z kontextového menu ikony | Hotovo | tests/test_tray.py |
 | UC1-R7 | Ovládání služby i běžným uživatelem, povolené přes ACL služby | Hotovo | tests/test_service.py |
-| UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Zbývá | |
+| UC1-R8 | Automatické spuštění tray aplikace při přihlášení uživatele | Hotovo | N/A |
 | UC2-R1 | Konfigurace jako JSON dump konfigurační třídy přes jsonpickle | Hotovo | tests/test_config.py |
 | UC2-R2 | Skupina parametrů odesílání do Zabbixu: spojení, `location` a prodleva | Hotovo | tests/test_sender.py |
 | UC2-R3 | Seznam 1 až 4 turbín, každá nastavená samostatně | Hotovo | tests/test_config.py |

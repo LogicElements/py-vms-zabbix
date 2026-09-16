@@ -23,7 +23,7 @@
 | 2 | Katalog metrik a sběr z databáze | [x] |
 | 3 | Odesílání a smyčka agenta | [x] |
 | 4 | Služba Windows | [x] |
-| 5 | Tray aplikace | [ ] |
+| 5 | Tray aplikace | [x] |
 | 6 | Logování a vlastní stav agenta | [x] |
 | 7 | Šablona pro Zabbix a návod | [x] |
 
@@ -150,8 +150,8 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 
 **Stav:** kroky 1 až 8 jsou hotové, z kroku 9 prošly barvy ikony a tři akce z menu, takže
 UC1-R5 a UC1-R6 jsou Hotovo. UC2-R8 je Hotovo až po opravě práv k složce v `ProgramData` (viz etapa 6) – otevřít
-konfiguraci šlo hned, ale uložit ji ne. Zbývá jediné: automatické spuštění po přihlášení
-(UC1-R8), na které je potřeba odhlášení a restart serveru.
+konfiguraci šlo hned, ale uložit ji ne. UC1-R8 se ověřil restartem stroje: po něm běžela
+služba i tray aplikace, aniž by je kdokoli spouštěl.
 
 Ikona nese uprostřed písmeno Z, aby nebyla jen barevným čtvercem.
 
