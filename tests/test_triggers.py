@@ -63,6 +63,20 @@ def test_names_are_unique():
     assert len({trigger.name for trigger in TRIGGERS}) == len(TRIGGERS)
 
 
+def test_triggers_on_a_value_show_it_in_their_name():
+    """The list of problems shows the name, so the value belongs in it.
+
+    A trigger that fires on the value of its metric says what that value was;
+    nodata() fires on the absence of one, so there is nothing to show.
+    """
+    for trigger in TRIGGERS:
+        if trigger.condition.startswith("nodata("):
+            assert "{ITEM.VALUE}" not in trigger.name
+        elif trigger.key.startswith("vms.buf") or trigger.key.endswith("_age") \
+                or trigger.key == "vms.agent_error":
+            assert "{ITEM.VALUE}" in trigger.name, trigger.name
+
+
 def test_the_placeholder_becomes_the_reference_to_the_metric():
     """UC5-R4: {METRIC} stands for /<šablona>/<klíč>."""
     trigger = TRIGGERS[0]

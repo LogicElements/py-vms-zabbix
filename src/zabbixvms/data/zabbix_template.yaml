@@ -29,7 +29,7 @@ zabbix_export:
       triggers:
       - uuid: 2abdc22939b940d18730b46f18d26307
         expression: last(/VMS zabbix agent/vms.info_age)>5m
-        name: Chyba databáze VMS setupu
+        name: 'Chyba databáze VMS setupu: {ITEM.VALUE}'
         priority: HIGH
     - uuid: b5af6061c19c4011843ad8aa3f7b2415
       name: Stáří timestamp dat
@@ -42,7 +42,7 @@ zabbix_export:
       triggers:
       - uuid: 1dc8294a8f2e426b847b62e85e36ebe7
         expression: last(/VMS zabbix agent/vms.timestamp_age)>5m
-        name: Chyba timestamp socketu
+        name: 'Chyba timestamp socketu: {ITEM.VALUE}'
         priority: HIGH
     - uuid: 1c725e79f2cb408a9031ba9d6a77bd06
       name: Stáří konfiguračních dat
@@ -55,7 +55,7 @@ zabbix_export:
       triggers:
       - uuid: 0df19bd241174a11a3f207a99a65631c
         expression: last(/VMS zabbix agent/vms.config_age)>5m
-        name: Chyba konfiguračního socketu
+        name: 'Chyba konfiguračního socketu: {ITEM.VALUE}'
         priority: HIGH
     - uuid: 98706240c28143d68625ee59fde5804f
       name: Počet řádků v bufferech
@@ -66,7 +66,7 @@ zabbix_export:
       triggers:
       - uuid: 287c381300b149af850cf8f0e4f18b84
         expression: last(/VMS zabbix agent/vms.buf_rows)>100000
-        name: Chyba SW analýzy čtení bufferu
+        name: 'Chyba SW analýzy čtení bufferu: {ITEM.VALUE}'
         priority: HIGH
     - uuid: 1d6bbea0f0dd42d7aef8d9cd9b2dff5b
       name: Stáří bufferů

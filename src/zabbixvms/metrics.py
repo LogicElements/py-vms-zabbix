@@ -119,25 +119,25 @@ METRIC_PLACEHOLDER = "{METRIC}"
 # template the trigger ends up under, which is where an export keeps its triggers.
 TRIGGERS = (
     Trigger(
-        name="Chyba databáze VMS setupu",
+        name="Chyba databáze VMS setupu: {ITEM.VALUE}",
         key="vms.info_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
     ),
     Trigger(
-        name="Chyba timestamp socketu",
+        name="Chyba timestamp socketu: {ITEM.VALUE}",
         key="vms.timestamp_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
     ),
     Trigger(
-        name="Chyba konfiguračního socketu",
+        name="Chyba konfiguračního socketu: {ITEM.VALUE}",
         key="vms.config_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
     ),
     Trigger(
-        name="Chyba SW analýzy čtení bufferu",
+        name="Chyba SW analýzy čtení bufferu: {ITEM.VALUE}",
         key="vms.buf_rows",
         condition="last({METRIC})>100000",
         priority="HIGH",
