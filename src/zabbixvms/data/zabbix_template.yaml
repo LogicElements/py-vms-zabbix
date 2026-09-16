@@ -76,6 +76,11 @@ zabbix_export:
       description: Doba od posledních dat přijatých do toho bufferu turbíny, který je na tom nejhůř. Hodnoty
         nad jeden měsíc se hlásí jako jeden měsíc.
       units: s
+      triggers:
+      - uuid: e591aeac83694c0e9f830edac4dff97a
+        expression: last(/VMS zabbix agent/vms.buf_age)>5m
+        name: 'Chyba ukládání do bufferu: {ITEM.VALUE}'
+        priority: HIGH
     - uuid: 849b5bbd3365482fa084617078b280c5
       name: Doba bulk zápisu
       type: TRAP

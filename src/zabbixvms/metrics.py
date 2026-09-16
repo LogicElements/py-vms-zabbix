@@ -143,6 +143,12 @@ TRIGGERS = (
         priority="HIGH",
     ),
     Trigger(
+        name="Chyba ukládání do bufferu: {ITEM.VALUE}",
+        key="vms.buf_age",
+        condition="last({METRIC})>5m",
+        priority="HIGH",
+    ),
+    Trigger(
         name="Agent hlásí chybu nebo varování",
         key="vms.agent_status",
         condition="last({METRIC})>0",
