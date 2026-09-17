@@ -70,3 +70,24 @@ chyba: mlčící host může znamenat, že agent vůbec neběží.
 Trigger má pevné okno 5 minut, kdežto prodleva mezi cykly se nastavuje v konfiguraci
 (5 až 120 sekund). Při krátké prodlevě se do okna vejde mnoho cyklů, při prodlevě 120 s
 už jen dva a půl — počítejte s tím, že při dlouhých prodlevách trigger reaguje citlivěji.
+
+### Pád procesu na nativní úrovni
+
+Chybu uvnitř nativní knihovny (`.pyd`, `.dll`) už Python zachytit nedokáže — proces
+zanikne okamžitě a v souborovém logu ani ve vlastním Event Logu agenta po něm nezůstane
+nic. Jedinou stopou je záznam **Application Error** v Event Logu Windows, kde je uvedený
+`pythonservice.exe` a padající modul.
+
+Jeden takový případ je známý. Konektor k MySQL s sebou nese `libmysql.dll` přeloženou
+novějším Visual Studiem, jehož `std::mutex` potřebuje běhové prostředí Visual C++ verze
+14.40 nebo novější. Proti staršímu zůstane zámek neinicializovaný a knihovna spadne
+s výjimkou `0xC0000005` v modulu `MSVCP140.dll`. Agent se tomu vyhýbá tím, že do MySQL
+chodí přes čistě Pythonovou implementaci konektoru (`use_pure=True`), takže do
+`libmysql.dll` vůbec nevstoupí. Verzi běhového prostředí na serveru zjistíte příkazem:
+
+```powershell
+(Get-Item C:\Windows\System32\msvcp140.dll).VersionInfo.FileVersion
+```
+
+V Zabbixu se takový pád projeví stejně jako neběžící služba, tedy triggerem
+„Z hostu nepřišla žádná hodnota 5m“.

@@ -81,6 +81,12 @@ class Collector:
             database=self._database.database,
             user=self._database.user,
             password=self._database.password,
+            # The bundled libmysql.dll is built with a toolset whose std::mutex needs
+            # the Visual C++ runtime 14.40 or newer and faults with an access violation
+            # on an older one, killing the process where no Python handler can see it.
+            # The pure Python implementation never calls into libmysql, and a handful
+            # of rows per period does not need the speed of the C extension.
+            use_pure=True,
         )
 
     @property

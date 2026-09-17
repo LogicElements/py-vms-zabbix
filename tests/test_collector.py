@@ -374,7 +374,20 @@ def test_connect_uses_the_values_from_the_configuration():
     Collector(config, connect=connect).connect()
 
     assert captured == {"host": "db.example.com", "database": "BVMS2",
-                        "user": "reader", "password": "secret"}
+                        "user": "reader", "password": "secret", "use_pure": True}
+
+
+def test_connect_stays_away_from_the_c_extension():
+    """UC2-R6: libmysql.dll needs a Visual C++ runtime the servers may not have."""
+    captured = {}
+
+    def connect(**kwargs):
+        captured.update(kwargs)
+        return FakeConnection()
+
+    Collector(DatabaseConfig(), connect=connect).connect()
+
+    assert captured["use_pure"] is True
 
 
 def test_close_releases_the_connection():
