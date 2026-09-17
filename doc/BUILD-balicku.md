@@ -134,3 +134,40 @@ zabbixvms-service install
 
 Jestli pak služba nenastartuje, je to skoro jistě tím, že Python není nainstalovaný pro celý
 stroj – viz [README](../README.md#instalace).
+
+## Aktualizace už nasazeného agenta
+
+Novou verzi **není potřeba nasazovat přes odebrání a znovunainstalování služby**. U služby
+je v registru uložená jen cesta k `pythonservice.exe` a název třídy, která ji obsluhuje
+(`zabbixvms.service.ZabbixVmsService`); kde balíček leží, si Python dohledá až při startu
+procesu. Stačí tedy vyměnit balíček a službu restartovat:
+
+```
+zabbixvms-service stop
+python -m pip install --no-index --find-links C:\install\offline ^
+    --force-reinstall --no-deps zabbixvms
+zabbixvms-service start
+```
+
+Tři věci, na kterých ten postup stojí:
+
+- **Nejdřív zastavit službu.** Běžící proces si starý kód drží v paměti až do restartu
+  a při plné reinstalaci závislostí by pip navíc nemohl přepsat knihovny pywin32, které má
+  proces načtené.
+- **`--force-reinstall` je nutný**, pokud se nezměnilo číslo verze v `pyproject.toml`. Bez
+  něj pip jen oznámí `Requirement already satisfied` a starý kód nechá na místě.
+- **`--no-deps`** omezí výměnu jen na `zabbixvms`, takže se nesáhne na pywin32 ani na
+  `pythonservice.exe`. Bez něj se reinstalují i všechny závislosti.
+
+Že agent zase běží, poznáte podle řádku `service ZabbixVms started` v logu
+`C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`. Konfigurace ve stejné složce
+zůstává aktualizací nedotčená; položky, které v ní nová verze postrádá, si agent při načtení
+doplní ve výchozích hodnotách.
+
+Odebrat a znovu nainstalovat službu (`zabbixvms-service remove` a `install`) je potřeba jen
+tehdy, když se mění samotné zakotvení služby:
+
+- balíček se stěhuje do jiného prostředí Pythonu, takže vede jinudy cesta
+  k `pythonservice.exe`,
+- mění se název služby nebo třídy, která ji obsluhuje,
+- je potřeba znovu nastavit práva ke službě, autostart tray aplikace nebo zdroj událostí.
