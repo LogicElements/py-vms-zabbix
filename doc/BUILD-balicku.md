@@ -106,10 +106,11 @@ copy dist\zabbixvms-*.whl offline\
 ```
 
 `pip download .` stáhne **jen závislosti**, vlastní balíček ne – ten je potřeba do složky
-zkopírovat z `dist/`, jak dělá druhý řádek. Ve složce `offline` pak bude šest souborů,
-dohromady kolem 25 MB:
+zkopírovat z `dist/`, jak dělá druhý řádek. Ve složce `offline` pak bude vedle
+instalačního skriptu šest wheelů, dohromady kolem 25 MB:
 
 ```
+install.ps1
 zabbixvms-<verze>-py3-none-any.whl
 jsonpickle-4.1.2-py3-none-any.whl
 mysql_connector_python-26.7.0-cp314-cp314-win_amd64.whl
@@ -138,23 +139,44 @@ Celou složku `offline` zkopírujte na server, třeba na `C:\install\offline`.
 
 ### 3. Nainstalovat bez sítě
 
-Z příkazové řádky spuštěné jako administrátor:
+Ve složce leží skript `install.ps1`, který instalaci i aktualizaci provede sám. Spusťte ho
+**jako správce**:
+
+```
+powershell -ExecutionPolicy Bypass -File C:\install\offline\install.ps1
+```
+
+Žádné parametry nepotřebuje – balíčky bere ze složky, ve které sám leží. Podle toho, co na
+serveru zastihne:
+
+- **agent tam ještě není** – nainstaluje balíček i se závislostmi, zaregistruje službu
+  a spustí ji,
+- **je tam starší verze** – zastaví službu, vymění jen balíček `zabbixvms` a službu zase
+  spustí,
+- **je tam stejná nebo novější verze** – nechá ji být a jen dohlédne, že služba běží.
+
+Než cokoli změní, ověří, že běží s právy správce, že je v `PATH` Python a že wheely ve složce
+patří k jeho verzi. Když něco z toho neplatí, skončí s vysvětlením a nic neudělá.
+
+Kdyby bylo potřeba totéž udělat ručně, odpovídá skript těmhle příkazům:
 
 ```
 python -m pip install --no-index --find-links C:\install\offline zabbixvms
-```
-
-`--no-index` zakáže PyPI a `--find-links` řekne, kde balíčky hledat, takže instalace proběhne
-jen ze souborů. Pak se agent zaregistruje obvyklým způsobem:
-
-```
 zabbixvms-service install
 ```
 
-Jestli pak služba nenastartuje, je to skoro jistě tím, že Python není nainstalovaný pro celý
-stroj – viz [README](../README.md#instalace).
+`--no-index` zakáže PyPI a `--find-links` řekne, kde balíčky hledat, takže instalace proběhne
+jen ze souborů.
+
+Jestli služba nenastartuje, je to skoro jistě tím, že Python není nainstalovaný pro celý
+stroj – viz [README](../README.md#instalace). Po první instalaci ještě upravte konfiguraci
+v `C:\ProgramData\LogicElements\ZabbixVms\config.json` podle dané turbíny a službu
+restartujte.
 
 ## Aktualizace už nasazeného agenta
+
+Na serveru tohle všechno udělá `install.ps1` ze složky `offline` (krok 3 výše). Zbytek téhle
+kapitoly popisuje, co přesně dělá a proč.
 
 Novou verzi **není potřeba nasazovat přes odebrání a znovunainstalování služby**. U služby
 je v registru uložená jen cesta k `pythonservice.exe` a název třídy, která ji obsluhuje

@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+ROOT = Path(__file__).resolve().parent.parent
+PYPROJECT = ROOT / "pyproject.toml"
+INSTALLER = ROOT / "offline" / "install.ps1"
 
 
 @pytest.fixture(scope="module")
@@ -61,3 +63,19 @@ def test_the_version_looks_like_a_release_number():
 
     assert len(parts) == 3, zabbixvms.__version__
     assert all(part.isdigit() for part in parts), zabbixvms.__version__
+
+
+def test_the_offline_installer_calls_things_what_the_code_calls_them():
+    """The script shipped with the wheels drives the service, so the names must match."""
+    from zabbixvms import service
+
+    script = INSTALLER.read_text(encoding="utf-8-sig")
+
+    assert f"$ServiceName = '{service.SERVICE_NAME}'" in script
+    assert "$PackageName = 'zabbixvms'" in script
+    assert "zabbixvms-service.exe" in script
+
+
+def test_the_offline_installer_is_readable_by_windows_powershell():
+    """Without the byte order mark PowerShell 5.1 mangles the Czech messages."""
+    assert INSTALLER.read_bytes().startswith(b"\xef\xbb\xbf")
