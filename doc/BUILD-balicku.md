@@ -39,6 +39,25 @@ Součástí sady jsou i testy proti prostředí, které jdou vynechat:
 - `db` – testy proti testovací databázi `BVMS`; když databáze není dostupná, přeskočí se samy
 - `gui` – testy, které staví skutečné okno a ikonu v systray, takže potřebují přihlášené sezení
 
+## Číslování verzí
+
+Verze balíčku je na jediném místě, v `src/zabbixvms/__init__.py`:
+
+```python
+__version__ = "0.1.1"
+```
+
+`pyproject.toml` si ji odtud bere (`dynamic = ["version"]`), takže se obě čísla nemají jak
+rozejít.
+
+**Verzi zvyšte u každé změny, která jde na server** – i u opravy chyby. Poslední číslo
+(patch) je přesně na opravy chování, prostřední na nové schopnosti agenta. Když se číslo
+nezmění, vzniknou dva různé soubory se stejným jménem: pip takový balíček považuje za už
+nainstalovaný a `pip install --upgrade` starou verzi na serveru nechá. Se zvýšeným číslem
+je nasazení obyčejný upgrade.
+
+Co je na serveru nasazené, zjistíte příkazem `pip show zabbixvms`.
+
 ## Sestavení a publikování
 
 ```
@@ -91,7 +110,7 @@ zkopírovat z `dist/`, jak dělá druhý řádek. Ve složce `offline` pak bude 
 dohromady kolem 25 MB:
 
 ```
-zabbixvms-0.1.0-py3-none-any.whl
+zabbixvms-<verze>-py3-none-any.whl
 jsonpickle-4.1.2-py3-none-any.whl
 mysql_connector_python-26.7.0-cp314-cp314-win_amd64.whl
 pywin32-312-cp314-cp314-win_amd64.whl
@@ -145,7 +164,7 @@ procesu. Stačí tedy vyměnit balíček a službu restartovat:
 ```
 zabbixvms-service stop
 python -m pip install --no-index --find-links C:\install\offline ^
-    --force-reinstall --no-deps zabbixvms
+    --upgrade --no-deps zabbixvms
 zabbixvms-service start
 ```
 
@@ -154,10 +173,11 @@ Tři věci, na kterých ten postup stojí:
 - **Nejdřív zastavit službu.** Běžící proces si starý kód drží v paměti až do restartu
   a při plné reinstalaci závislostí by pip navíc nemohl přepsat knihovny pywin32, které má
   proces načtené.
-- **`--force-reinstall` je nutný**, pokud se nezměnilo číslo verze v `pyproject.toml`. Bez
-  něj pip jen oznámí `Requirement already satisfied` a starý kód nechá na místě.
 - **`--no-deps`** omezí výměnu jen na `zabbixvms`, takže se nesáhne na pywin32 ani na
   `pythonservice.exe`. Bez něj se reinstalují i všechny závislosti.
+- **Nová verze musí mít vyšší číslo**, jinak `--upgrade` neudělá nic a pip jen oznámí
+  `Requirement already satisfied` – viz *Číslování verzí* výše. Když z nějakého důvodu
+  zvýšit nejde, použijte místo `--upgrade` parametr `--force-reinstall`.
 
 Že agent zase běží, poznáte podle řádku `service ZabbixVms started` v logu
 `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`. Konfigurace ve stejné složce

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zabbixvms"
 description = "Zabbix monitoring agent for Logic Elements VMS deployments"
-version = "0.1.0"
+dynamic = ["version"]
 authors = [
   { name="Jan Bartovský", email="jan.bartovsky@logicelements.cz" },
 ]
@@ -44,6 +44,10 @@ where = ["src"]
 
 [tool.setuptools]
 include-package-data = true
+
+# The version has a single home in the package itself, see doc/BUILD-balicku.md.
+[tool.setuptools.dynamic]
+version = {attr = "zabbixvms.__version__"}
 
 [tool.setuptools.package-data]
 zabbixvms = ["data/*.json", "data/*.yaml"]

@@ -42,3 +42,22 @@ def test_package_data_carries_the_default_configuration(pyproject):
     patterns = pyproject["tool"]["setuptools"]["package-data"]["zabbixvms"]
 
     assert "data/*.json" in patterns
+
+
+def test_the_version_has_a_single_home(pyproject):
+    """The version lives in the package only, so two places cannot drift apart."""
+    assert "version" not in pyproject["project"], "pyproject must not carry its own version"
+    assert "version" in pyproject["project"]["dynamic"]
+    assert pyproject["tool"]["setuptools"]["dynamic"]["version"] == {
+        "attr": "zabbixvms.__version__"
+    }
+
+
+def test_the_version_looks_like_a_release_number():
+    """Every change that reaches a server raises it, so that pip sees an upgrade."""
+    import zabbixvms
+
+    parts = zabbixvms.__version__.split(".")
+
+    assert len(parts) == 3, zabbixvms.__version__
+    assert all(part.isdigit() for part in parts), zabbixvms.__version__
