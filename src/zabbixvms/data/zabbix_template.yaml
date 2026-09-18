@@ -18,6 +18,11 @@ zabbix_export:
       value_type: FLOAT
       description: Aktuální otáčky turbíny
       units: rpm
+      triggers:
+      - uuid: e4e70c8b2791485dba5aee84e7745b44
+        expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
+        name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+        priority: AVERAGE
     - uuid: 3a84f34e1bf443d2a5db342cb44d793a
       name: Stáří info záznamu
       type: TRAP
@@ -31,6 +36,9 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.info_age)>5m
         name: 'Chyba databáze VMS setupu: {ITEM.VALUE}'
         priority: HIGH
+        dependencies:
+        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: b5af6061c19c4011843ad8aa3f7b2415
       name: Stáří timestamp dat
       type: TRAP
@@ -44,6 +52,9 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.timestamp_age)>5m
         name: 'Chyba timestamp socketu: {ITEM.VALUE}'
         priority: HIGH
+        dependencies:
+        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: 1c725e79f2cb408a9031ba9d6a77bd06
       name: Stáří konfiguračních dat
       type: TRAP
@@ -57,6 +68,9 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.config_age)>5m
         name: 'Chyba konfiguračního socketu: {ITEM.VALUE}'
         priority: HIGH
+        dependencies:
+        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: 98706240c28143d68625ee59fde5804f
       name: Počet řádků v bufferech
       type: TRAP
@@ -81,6 +95,9 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.buf_age)>5m
         name: 'Chyba ukládání do bufferu: {ITEM.VALUE}'
         priority: HIGH
+        dependencies:
+        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: 849b5bbd3365482fa084617078b280c5
       name: Doba bulk zápisu
       type: TRAP
@@ -116,6 +133,10 @@ zabbix_export:
         expression: length(last(/VMS zabbix agent/vms.agent_error))>0
         name: 'Chyba agenta: {ITEM.VALUE}'
         priority: AVERAGE
+    macros:
+    - macro: '{$VMS.SPEED.NOMINAL}'
+      value: '2500'
+      description: Otáčky, pod kterými se turbína nepovažuje za běžící.
     valuemaps:
     - uuid: 7508a404e6db427c9cb2fcaca34c537c
       name: Stav agenta

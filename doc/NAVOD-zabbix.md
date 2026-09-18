@@ -31,3 +31,20 @@ metriky agenta i triggery hlásící jeho chyby.
 
 Pole **Templates** je součástí formuláře hosta, takže je šablona po kroku 2 k dispozici
 a jde vyplnit rovnou při zakládání hosta v kroku 1.
+
+## 4. Mez otáček, pokud turbína nejede na 3000
+
+Šablona nese makro `{$VMS.SPEED.NOMINAL}` s výchozí hodnotou **2500**. Pod touhle mezí se
+turbína považuje za neběžící a trigger *Turbína pod nominálními otáčkami* přejde do
+problémového stavu.
+
+Ten trigger sám o sobě nic nehlásí jako poruchu – jeho smyslem je **umlčet triggery nad
+stářím dat** (`vms.info_age`, `vms.timestamp_age`, `vms.config_age`, `vms.buf_age`). Stojící
+turbína nová data nezapisuje, takže by jinak stářím dat poplašila dohled pokaždé, když se
+zastaví. Triggery s ním mají závislost, takže se po dobu jeho aktivity neuplatní. `vms.buf_rows`
+podmíněný není, přeplněný buffer je problém i za klidu.
+
+Turbína s jinými nominálními otáčkami nepotřebuje vlastní šablonu, stačí makro přepsat
+u hosta: v nastavení hosta záložka **Macros → Inherited and host macros**, u
+`{$VMS.SPEED.NOMINAL}` zvolit **Change** a zadat vlastní hodnotu. Ostatní hosté dál jedou
+podle šablony.

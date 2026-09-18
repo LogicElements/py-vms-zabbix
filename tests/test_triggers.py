@@ -1,6 +1,7 @@
 """Tests of the trigger catalog: it holds exactly the triggers of the table in the
 PRS and every one of them watches a metric of the catalog (UC5-R4)."""
 
+import re
 from pathlib import Path
 
 from zabbixvms import metrics
@@ -8,7 +9,9 @@ from zabbixvms.metrics import METRIC_PLACEHOLDER, TRIGGERS
 from zabbixvms.template import TEMPLATE_NAME, expression_of
 
 PRS = Path(__file__).resolve().parent.parent / "doc" / "PRS-zabbixvms.md"
-HEADER = "| Název triggeru | Klíč metriky | Podmínka | Priorita |"
+HEADER = "| Název triggeru | Klíč metriky | Podmínka | Priorita | Závisí na |"
+# What the dependency cell holds for a trigger that nothing blocks.
+NOTHING = "–"
 
 ZABBIX_PRIORITIES = {"NOT_CLASSIFIED", "INFO", "WARNING", "AVERAGE", "HIGH", "DISASTER"}
 
@@ -30,13 +33,13 @@ def test_prs_table_is_readable():
     rows = prs_trigger_rows()
 
     assert len(rows) > 1
-    assert all(len(row) == 4 for row in rows)
+    assert all(len(row) == 5 for row in rows)
 
 
 def test_catalog_matches_the_prs_table():
     """UC5-R4: the template carries the triggers of the table, no more and no fewer."""
     catalog = [[trigger.name, f"`{trigger.key}`", f"`{trigger.condition}`",
-                trigger.priority]
+                trigger.priority, trigger.blocked_by or NOTHING]
                for trigger in TRIGGERS]
 
     assert catalog == prs_trigger_rows()
@@ -97,3 +100,40 @@ def test_the_table_holds_the_three_triggers_the_dod_names():
     assert any(condition.startswith("last(") for condition in conditions)
     assert any(condition.startswith("nodata(") for condition in conditions)
     assert "{ITEM.VALUE}" in by_key["vms.agent_error"][0].name
+
+
+def test_every_dependency_names_a_trigger_of_the_catalog():
+    """UC5-R4: a dependency on a name nothing carries would be dropped on import."""
+    for trigger in TRIGGERS:
+        if trigger.blocked_by:
+            assert metrics.trigger_named(trigger.blocked_by)
+
+
+def test_the_triggers_on_the_age_of_the_data_wait_for_the_turbine_to_run():
+    """UC5-R4: a standing turbine writes nothing, so stale data is not an error then."""
+    for trigger in TRIGGERS:
+        if trigger.key.endswith("_age"):
+            assert trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL, trigger.key
+
+
+def test_nothing_blocks_the_trigger_that_blocks_the_others():
+    """A trigger that depends on itself, however indirectly, never fires."""
+    for trigger in TRIGGERS:
+        seen = {trigger.name}
+        blocker = trigger.blocked_by
+        while blocker:
+            assert blocker not in seen, trigger.name
+            seen.add(blocker)
+            blocker = metrics.trigger_named(blocker).blocked_by
+
+
+def test_every_macro_a_condition_uses_is_declared():
+    """UC5-R4: an undeclared macro leaves the condition without a threshold."""
+    declared = {macro.name for macro in metrics.MACROS}
+    found = []
+    for trigger in TRIGGERS:
+        for used in re.findall(r"\{\$[^}]+\}", trigger.condition):
+            found.append(used)
+            assert used in declared, f"{trigger.name}: {used}"
+    # Without a condition that really uses one, the loop above proves nothing.
+    assert found

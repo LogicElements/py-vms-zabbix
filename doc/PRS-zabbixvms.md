@@ -33,7 +33,7 @@
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
-| UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Hotovo | tests/test_template.py |
+| UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Zbývá | tests/test_template.py |
 
 ## Účel projektu
 
@@ -341,19 +341,34 @@ logovacího souboru a ty zásadní i do Windows Event Logu.
 
 Sada triggerů, které šablona obsahuje:
 
-| Název triggeru | Klíč metriky | Podmínka | Priorita |
-| --- | --- | --- | --- |
-| Chyba databáze VMS setupu: {ITEM.VALUE} | `vms.info_age` | `last({METRIC})>5m` | HIGH |
-| Chyba timestamp socketu: {ITEM.VALUE} | `vms.timestamp_age` | `last({METRIC})>5m` | HIGH |
-| Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH |
-| Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH |
-| Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH |
-| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | AVERAGE |
-| Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH |
-| Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE |
+| Název triggeru | Klíč metriky | Podmínka | Priorita | Závisí na |
+| --- | --- | --- | --- | --- |
+| Turbína pod nominálními otáčkami: {ITEM.VALUE} | `vms.speed` | `last({METRIC})<{$VMS.SPEED.NOMINAL}` | AVERAGE | – |
+| Chyba databáze VMS setupu: {ITEM.VALUE} | `vms.info_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba timestamp socketu: {ITEM.VALUE} | `vms.timestamp_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH | – |
+| Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | AVERAGE | – |
+| Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH | – |
+| Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE | – |
 
 `{METRIC}` v podmínce zastupuje odkaz na metriku ve tvaru `/<název šablony>/<klíč metriky>`.
 Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
+
+Sloupec **Závisí na** znamená závislost triggerů v Zabbixu: dokud je uvedený trigger
+v problémovém stavu, závislý trigger se neuplatní. Triggery nad stářím dat proto mlčí,
+když turbína neběží – stará data jsou v takovém případě očekávaná, ne chyba. Naopak
+přeplněný buffer je problém i za klidu, takže `vms.buf_rows` podmíněný není.
+
+Mez otáček nese makro šablony:
+
+| Makro | Výchozí hodnota | Význam |
+| --- | --- | --- |
+| `{$VMS.SPEED.NOMINAL}` | 2500 | Otáčky, pod kterými se turbína nepovažuje za běžící |
+
+Makro jde přepsat na hostu, takže turbína s jinými nominálními otáčkami nepotřebuje vlastní
+šablonu.
 
 ### UC5-R4
 **Popis:** Šablona pro Zabbix obsahuje mapování stavů a triggery vedené jako tabulka v této PRS.
@@ -361,5 +376,7 @@ Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu le�
 - Šablona obsahuje value map, která u `vms.agent_status` překládá hodnoty 0, 1 a 2 na text.
 - Šablona obsahuje právě triggery z tabulky výše – žádný navíc a žádný nevynechává.
 - Každý trigger má název, podmínku a prioritu podle svého řádku tabulky.
+- Trigger, který má v tabulce vyplněný sloupec Závisí na, je v exportu závislý na triggeru toho jména, takže se neuplatní, dokud je blokující trigger v problémovém stavu.
+- Šablona obsahuje makra z tabulky maker i s výchozími hodnotami a každé makro použité v podmínce triggeru je v ní deklarované.
 - Každý trigger se odkazuje na klíč metriky, který je v tabulce metrik v UC3.
 - Tabulka obsahuje trigger na stav agenta, trigger na neprázdný `vms.agent_error` s textem chyby ve jméně a trigger na to, že na host nedorazila žádná hodnota po dobu 5 minut; ten pokrývá i případ, kdy agent neběží nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.

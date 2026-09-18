@@ -13,7 +13,9 @@ from zabbixvms.template import (
     TEMPLATE_GROUP,
     TEMPLATE_NAME,
     TRAPPER,
+    all_triggers,
     build,
+    exported_trigger,
     groups_section,
     stable_uuid,
     template_path,
@@ -204,3 +206,50 @@ def test_every_uuid_is_version_four():
 
 def test_building_twice_gives_the_same_template():
     assert build() == build()
+
+
+def test_the_template_declares_the_macros_of_the_catalog():
+    """UC5-R4: a threshold kept in a macro can be overridden on a single host."""
+    declared = template_of(build())["macros"]
+
+    assert declared == [
+        {"macro": macro.name, "value": macro.value, "description": macro.description}
+        for macro in metrics.MACROS
+    ]
+
+
+def test_the_shipped_template_declares_the_macros_too():
+    """UC5-R4: the file in the package is what gets imported, not what build() returns."""
+    assert template_of(exported())["macros"] == template_of(build())["macros"]
+
+
+def test_a_blocked_trigger_points_at_the_one_that_blocks_it():
+    """UC5-R4: the dependency names the blocking trigger and repeats its expression."""
+    blocked = [trigger for trigger in metrics.TRIGGERS if trigger.blocked_by]
+    assert blocked, "the check needs at least one dependent trigger"
+
+    exported_by_name = {trigger["name"]: trigger for trigger in all_triggers()}
+    for trigger in blocked:
+        blocker = metrics.trigger_named(trigger.blocked_by)
+        dependencies = exported_by_name[trigger.name]["dependencies"]
+
+        assert dependencies == [{"name": blocker.name,
+                                 "expression": exported_by_name[blocker.name]["expression"]}]
+
+
+def test_a_trigger_nothing_blocks_carries_no_dependency():
+    """An empty dependencies section would only be noise in the export."""
+    for trigger in metrics.TRIGGERS:
+        if not trigger.blocked_by:
+            assert "dependencies" not in {**exported_trigger(trigger)}
+
+
+def test_the_shipped_template_carries_the_dependencies():
+    """UC5-R4: the dependency has to survive into the file that is imported."""
+    shipped = {trigger["name"]: trigger
+               for item in template_of(exported())["items"]
+               for trigger in item.get("triggers", [])}
+
+    for trigger in metrics.TRIGGERS:
+        if trigger.blocked_by:
+            assert shipped[trigger.name]["dependencies"][0]["name"] == trigger.blocked_by

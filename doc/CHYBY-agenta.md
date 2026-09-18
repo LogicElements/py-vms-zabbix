@@ -71,6 +71,15 @@ Trigger má pevné okno 5 minut, kdežto prodleva mezi cykly se nastavuje v konf
 (5 až 120 sekund). Při krátké prodlevě se do okna vejde mnoho cyklů, při prodlevě 120 s
 už jen dva a půl — počítejte s tím, že při dlouhých prodlevách trigger reaguje citlivěji.
 
+### Stojící turbína není chyba
+
+Triggery nad stářím dat (`vms.info_age`, `vms.timestamp_age`, `vms.config_age`,
+`vms.buf_age`) mlčí, dokud jsou otáčky pod mezí makra `{$VMS.SPEED.NOMINAL}`. Stojící
+turbína nová data nezapisuje, takže rostoucí stáří je v takové chvíli očekávané. Řeší to
+závislost na triggeru *Turbína pod nominálními otáčkami*, viz
+[návod na Zabbix](NAVOD-zabbix.md). Agent sám v tom nehraje roli – posílá metriky stejně
+jako jindy, rozhoduje se až v Zabbixu.
+
 ### Pád procesu na nativní úrovni
 
 Chybu uvnitř nativní knihovny (`.pyd`, `.dll`) už Python zachytit nedokáže — proces

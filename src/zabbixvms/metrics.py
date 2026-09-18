@@ -103,6 +103,26 @@ METRICS = (
 )
 
 @dataclass(frozen=True)
+class Macro:
+    """One macro of the template, as its row of the macro table in the PRS."""
+
+    name: str
+    value: str
+    description: str
+
+
+# A macro keeps a threshold out of the conditions, so a turbine that runs at another
+# speed only needs the value overridden on its host, not a template of its own.
+MACROS = (
+    Macro(
+        name="{$VMS.SPEED.NOMINAL}",
+        value="2500",
+        description="Otáčky, pod kterými se turbína nepovažuje za běžící.",
+    ),
+)
+
+
+@dataclass(frozen=True)
 class Trigger:
     """One trigger of the template, as its row of the trigger table in the PRS."""
 
@@ -110,31 +130,46 @@ class Trigger:
     key: str
     condition: str
     priority: str
+    # Name of the trigger that suppresses this one while it is itself firing.
+    blocked_by: str = ""
 
 
 # What the condition writes instead of the reference to the metric.
 METRIC_PLACEHOLDER = "{METRIC}"
 
+# Stale data is what a standing turbine is supposed to produce, so the triggers on the
+# age of the data stay quiet while this one fires.
+TURBINE_BELOW_NOMINAL = "Turbína pod nominálními otáčkami: {ITEM.VALUE}"
+
 # The triggers mirror the trigger table of the PRS. The key decides which item of the
 # template the trigger ends up under, which is where an export keeps its triggers.
 TRIGGERS = (
+    Trigger(
+        name=TURBINE_BELOW_NOMINAL,
+        key="vms.speed",
+        condition="last({METRIC})<{$VMS.SPEED.NOMINAL}",
+        priority="AVERAGE",
+    ),
     Trigger(
         name="Chyba databáze VMS setupu: {ITEM.VALUE}",
         key="vms.info_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
+        blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
         name="Chyba timestamp socketu: {ITEM.VALUE}",
         key="vms.timestamp_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
+        blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
         name="Chyba konfiguračního socketu: {ITEM.VALUE}",
         key="vms.config_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
+        blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
         name="Chyba SW analýzy čtení bufferu: {ITEM.VALUE}",
@@ -147,6 +182,7 @@ TRIGGERS = (
         key="vms.buf_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
+        blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
         name="Agent hlásí chybu nebo varování",
@@ -182,3 +218,11 @@ def by_key(key: str) -> Metric:
         if metric.key == key:
             return metric
     raise KeyError(key)
+
+
+def trigger_named(name: str) -> Trigger:
+    """Trigger of that name; a dependency naming no trigger would be silently lost."""
+    for trigger in TRIGGERS:
+        if trigger.name == name:
+            return trigger
+    raise KeyError(name)

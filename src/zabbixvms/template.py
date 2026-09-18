@@ -98,23 +98,42 @@ def expression_of(trigger) -> str:
                                      f"/{TEMPLATE_NAME}/{trigger.key}")
 
 
+def dependencies_of(trigger) -> list[dict]:
+    """The trigger that suppresses this one, in the shape an export wants it.
+
+    A dependency points at a trigger by the pair that identifies it, so the blocking
+    one is looked up in the catalog rather than spelled out a second time.
+    """
+    if not trigger.blocked_by:
+        return []
+    blocker = metrics.trigger_named(trigger.blocked_by)
+    return [{"name": blocker.name, "expression": expression_of(blocker)}]
+
+
+def exported_trigger(trigger) -> dict:
+    """One trigger of the catalog as the export writes it."""
+    exported = {
+        # Derived from what the trigger watches, not from its name, so renaming
+        # one updates it on import instead of leaving the old one behind.
+        "uuid": stable_uuid(f"trigger:{trigger.key}:{trigger.condition}"),
+        "expression": expression_of(trigger),
+        "name": trigger.name,
+        "priority": trigger.priority,
+    }
+    dependencies = dependencies_of(trigger)
+    if dependencies:
+        exported["dependencies"] = dependencies
+    return exported
+
+
 def triggers_of(key: str) -> list[dict]:
     """Triggers of the catalog that belong under the item of that key.
 
     An export carries a trigger inside the item its expression reads, not beside the
     items; a template with a triggers section of its own is refused on import.
     """
-    return [
-        {
-            # Derived from what the trigger watches, not from its name, so renaming
-            # one updates it on import instead of leaving the old one behind.
-            "uuid": stable_uuid(f"trigger:{trigger.key}:{trigger.condition}"),
-            "expression": expression_of(trigger),
-            "name": trigger.name,
-            "priority": trigger.priority,
-        }
-        for trigger in metrics.TRIGGERS if trigger.key == key
-    ]
+    return [exported_trigger(trigger)
+            for trigger in metrics.TRIGGERS if trigger.key == key]
 
 
 def all_triggers() -> list[dict]:
@@ -139,6 +158,11 @@ def build() -> dict:
                     "description": "Metriky softwaru VMS odesílané agentem zabbixvms.",
                     "groups": [{"name": TEMPLATE_GROUP}],
                     "items": [item(metric) for metric in metrics.METRICS],
+                    "macros": [
+                        {"macro": macro.name, "value": macro.value,
+                         "description": macro.description}
+                        for macro in metrics.MACROS
+                    ],
                     "valuemaps": [
                         {
                             "uuid": stable_uuid(f"valuemap:{STATUS_VALUE_MAP}"),
