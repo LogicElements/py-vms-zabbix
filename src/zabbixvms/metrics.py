@@ -137,9 +137,9 @@ class Trigger:
 # What the condition writes instead of the reference to the metric.
 METRIC_PLACEHOLDER = "{METRIC}"
 
-# A standing turbine writes no measurements, so the triggers on the age of what it
-# measures stay quiet while this one fires. The setup database is written whatever the
-# turbine does, so the trigger on its age is not among them.
+# What a standing turbine stops filling is the buffer, so the trigger on its age waits
+# for this one; the other sources are written whatever the turbine does. Any trigger
+# that should wait too only needs this name in its blocked_by.
 TURBINE_BELOW_NOMINAL = "Turbína pod nominálními otáčkami: {ITEM.VALUE}"
 
 # The triggers mirror the trigger table of the PRS. The key decides which item of the
@@ -162,14 +162,12 @@ TRIGGERS = (
         key="vms.timestamp_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
-        blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
         name="Chyba konfiguračního socketu: {ITEM.VALUE}",
         key="vms.config_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
-        blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
         name="Chyba SW analýzy čtení bufferu: {ITEM.VALUE}",

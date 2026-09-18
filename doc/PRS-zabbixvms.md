@@ -345,8 +345,8 @@ Sada triggerů, které šablona obsahuje:
 | --- | --- | --- | --- | --- |
 | Turbína pod nominálními otáčkami: {ITEM.VALUE} | `vms.speed` | `last({METRIC})<{$VMS.SPEED.NOMINAL}` | AVERAGE | – |
 | Chyba databáze VMS setupu: {ITEM.VALUE} | `vms.info_age` | `last({METRIC})>5m` | HIGH | – |
-| Chyba timestamp socketu: {ITEM.VALUE} | `vms.timestamp_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
-| Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba timestamp socketu: {ITEM.VALUE} | `vms.timestamp_age` | `last({METRIC})>5m` | HIGH | – |
+| Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | – |
 | Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH | – |
 | Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | AVERAGE | – |
@@ -357,11 +357,11 @@ Sada triggerů, které šablona obsahuje:
 Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
 
 Sloupec **Závisí na** znamená závislost triggerů v Zabbixu: dokud je uvedený trigger
-v problémovém stavu, závislý trigger se neuplatní. Mlčí tak triggery nad stářím toho, co
-turbína měří – stojící turbína nová měření nezapisuje, takže rostoucí stáří je v takové
-chvíli očekávané, ne chyba. Nepodmíněné zůstávají `vms.info_age`, protože databáze VMS
-setupu se plní bez ohledu na otáčky, a `vms.buf_rows`, protože přeplněný buffer je problém
-i za klidu.
+v problémovém stavu, závislý trigger se neuplatní. Zatím ho má vyplněný jediný trigger,
+nad `vms.buf_age`: stojící turbína do bufferu nic neukládá, takže rostoucí stáří zápisu
+je v takové chvíli očekávané, ne chyba. Ostatní zdroje běží bez ohledu na otáčky a jejich
+triggery hlásí pořád. Přibýt může kterýkoli další – stačí do sloupce doplnit jméno
+blokujícího triggeru.
 
 Mez otáček nese makro šablony:
 

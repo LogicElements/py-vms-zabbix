@@ -38,13 +38,14 @@ a jde vyplnit rovnou při zakládání hosta v kroku 1.
 turbína považuje za neběžící a trigger *Turbína pod nominálními otáčkami* přejde do
 problémového stavu.
 
-Ten trigger sám o sobě nic nehlásí jako poruchu – jeho smyslem je **umlčet triggery nad
-stářím měřených dat** (`vms.timestamp_age`, `vms.config_age`, `vms.buf_age`). Stojící turbína
-nová měření nezapisuje, takže by jinak jejich stářím poplašila dohled pokaždé, když se
-zastaví. Tyhle triggery na něm mají závislost, takže se po dobu jeho aktivity neuplatní.
+Ten trigger sám o sobě nic nehlásí jako poruchu – jeho smyslem je **umlčet trigger nad
+stářím zápisu do bufferu** (`vms.buf_age`). Stojící turbína do bufferu nic neukládá, takže
+by jinak jeho stářím poplašila dohled pokaždé, když se zastaví. Trigger na něm má závislost,
+takže se po dobu jeho aktivity neuplatní.
 
-Nepodmíněné zůstávají `vms.info_age`, protože databáze VMS setupu se plní bez ohledu na
-otáčky, a `vms.buf_rows`, protože přeplněný buffer je problém i za klidu.
+Ostatní triggery hlásí bez ohledu na otáčky: databáze VMS setupu i oba sockety se plní
+i za klidu a přeplněný buffer je problém taky. Kdyby se ukázalo, že další trigger má za
+klidu mlčet, přidá se mu stejná závislost.
 
 Turbína s jinými nominálními otáčkami nepotřebuje vlastní šablonu, stačí makro přepsat
 u hosta: v nastavení hosta záložka **Macros → Inherited and host macros**, u

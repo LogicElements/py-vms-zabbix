@@ -49,9 +49,6 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.timestamp_age)>5m
         name: 'Chyba timestamp socketu: {ITEM.VALUE}'
         priority: HIGH
-        dependencies:
-        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
-          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: 1c725e79f2cb408a9031ba9d6a77bd06
       name: Stáří konfiguračních dat
       type: TRAP
@@ -65,9 +62,6 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.config_age)>5m
         name: 'Chyba konfiguračního socketu: {ITEM.VALUE}'
         priority: HIGH
-        dependencies:
-        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
-          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: 98706240c28143d68625ee59fde5804f
       name: Počet řádků v bufferech
       type: TRAP
