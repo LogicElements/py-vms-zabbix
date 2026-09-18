@@ -344,7 +344,7 @@ Sada triggerů, které šablona obsahuje:
 | Název triggeru | Klíč metriky | Podmínka | Priorita | Závisí na |
 | --- | --- | --- | --- | --- |
 | Turbína pod nominálními otáčkami: {ITEM.VALUE} | `vms.speed` | `last({METRIC})<{$VMS.SPEED.NOMINAL}` | AVERAGE | – |
-| Chyba databáze VMS setupu: {ITEM.VALUE} | `vms.info_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba databáze VMS setupu: {ITEM.VALUE} | `vms.info_age` | `last({METRIC})>5m` | HIGH | – |
 | Chyba timestamp socketu: {ITEM.VALUE} | `vms.timestamp_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH | – |
@@ -357,9 +357,11 @@ Sada triggerů, které šablona obsahuje:
 Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
 
 Sloupec **Závisí na** znamená závislost triggerů v Zabbixu: dokud je uvedený trigger
-v problémovém stavu, závislý trigger se neuplatní. Triggery nad stářím dat proto mlčí,
-když turbína neběží – stará data jsou v takovém případě očekávaná, ne chyba. Naopak
-přeplněný buffer je problém i za klidu, takže `vms.buf_rows` podmíněný není.
+v problémovém stavu, závislý trigger se neuplatní. Mlčí tak triggery nad stářím toho, co
+turbína měří – stojící turbína nová měření nezapisuje, takže rostoucí stáří je v takové
+chvíli očekávané, ne chyba. Nepodmíněné zůstávají `vms.info_age`, protože databáze VMS
+setupu se plní bez ohledu na otáčky, a `vms.buf_rows`, protože přeplněný buffer je problém
+i za klidu.
 
 Mez otáček nese makro šablony:
 

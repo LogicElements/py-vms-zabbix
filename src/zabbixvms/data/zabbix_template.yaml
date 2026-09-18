@@ -36,9 +36,6 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.info_age)>5m
         name: 'Chyba databáze VMS setupu: {ITEM.VALUE}'
         priority: HIGH
-        dependencies:
-        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
-          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: b5af6061c19c4011843ad8aa3f7b2415
       name: Stáří timestamp dat
       type: TRAP

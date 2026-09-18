@@ -109,11 +109,14 @@ def test_every_dependency_names_a_trigger_of_the_catalog():
             assert metrics.trigger_named(trigger.blocked_by)
 
 
-def test_the_triggers_on_the_age_of_the_data_wait_for_the_turbine_to_run():
-    """UC5-R4: a standing turbine writes nothing, so stale data is not an error then."""
-    for trigger in TRIGGERS:
-        if trigger.key.endswith("_age"):
-            assert trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL, trigger.key
+def test_only_what_a_standing_turbine_stops_writing_waits_for_it():
+    """UC5-R4: the setup database is written whether the turbine turns or not, so the
+    trigger on its age keeps firing; the measurements it stops writing do not."""
+    blocked = {trigger.key for trigger in TRIGGERS if trigger.blocked_by}
+
+    assert blocked == {"vms.timestamp_age", "vms.config_age", "vms.buf_age"}
+    assert all(trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL
+               for trigger in TRIGGERS if trigger.blocked_by)
 
 
 def test_nothing_blocks_the_trigger_that_blocks_the_others():

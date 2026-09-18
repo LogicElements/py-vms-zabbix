@@ -73,9 +73,10 @@ už jen dva a půl — počítejte s tím, že při dlouhých prodlevách trigge
 
 ### Stojící turbína není chyba
 
-Triggery nad stářím dat (`vms.info_age`, `vms.timestamp_age`, `vms.config_age`,
+Triggery nad stářím měřených dat (`vms.timestamp_age`, `vms.config_age`,
 `vms.buf_age`) mlčí, dokud jsou otáčky pod mezí makra `{$VMS.SPEED.NOMINAL}`. Stojící
-turbína nová data nezapisuje, takže rostoucí stáří je v takové chvíli očekávané. Řeší to
+turbína nová měření nezapisuje, takže rostoucí stáří je v takové chvíli očekávané.
+`vms.info_age` mezi nimi není – databáze VMS setupu se plní bez ohledu na otáčky. Řeší to
 závislost na triggeru *Turbína pod nominálními otáčkami*, viz
 [návod na Zabbix](NAVOD-zabbix.md). Agent sám v tom nehraje roli – posílá metriky stejně
 jako jindy, rozhoduje se až v Zabbixu.
