@@ -151,12 +151,15 @@ serveru zastihne:
 
 - **agent tam ještě není** – nainstaluje balíček i se závislostmi, zaregistruje službu
   a spustí ji,
-- **je tam starší verze** – zastaví službu, vymění jen balíček `zabbixvms` a službu zase
-  spustí,
+- **je tam starší verze** – ukončí tray aplikaci, zastaví službu, vymění jen balíček
+  `zabbixvms` a službu i tray zase spustí,
 - **je tam stejná nebo novější verze** – nechá ji být a jen dohlédne, že služba běží.
 
 Než cokoli změní, ověří, že běží s právy správce, že je v `PATH` Python a že wheely ve složce
 patří k jeho verzi. Když něco z toho neplatí, skončí s vysvětlením a nic neudělá.
+
+Tray aplikaci skript spouští znovu ve svém vlastním sezení. Když běžela pod jiným přihlášeným
+uživatelem, tomu se sama vrátí až při jeho příštím přihlášení.
 
 Kdyby bylo potřeba totéž udělat ručně, odpovídá skript těmhle příkazům:
 
@@ -195,6 +198,10 @@ Tři věci, na kterých ten postup stojí:
 - **Nejdřív zastavit službu.** Běžící proces si starý kód drží v paměti až do restartu
   a při plné reinstalaci závislostí by pip navíc nemohl přepsat knihovny pywin32, které má
   proces načtené.
+- **Ukončit i tray aplikaci.** Drží otevřené `zabbixvms-tray.exe` a soubor, který má
+  v ruce běžící proces, pip nevymění – skončil by chybou `WinError 32`. Zavřete ji položkou
+  *Ukončit* v jejím menu nebo příkazem `Stop-Process -Name zabbixvms-tray -Force`
+  a po aktualizaci ji zase spusťte; sama naběhne i při příštím přihlášení.
 - **`--no-deps`** omezí výměnu jen na `zabbixvms`, takže se nesáhne na pywin32 ani na
   `pythonservice.exe`. Bez něj se reinstalují i všechny závislosti.
 - **Nová verze musí mít vyšší číslo**, jinak `--upgrade` neudělá nic a pip jen oznámí

@@ -65,15 +65,19 @@ def test_the_version_looks_like_a_release_number():
     assert all(part.isdigit() for part in parts), zabbixvms.__version__
 
 
-def test_the_offline_installer_calls_things_what_the_code_calls_them():
-    """The script shipped with the wheels drives the service, so the names must match."""
+def test_the_offline_installer_calls_things_what_the_code_calls_them(pyproject):
+    """The script shipped with the wheels drives both programs, so the names must match."""
     from zabbixvms import service
 
     script = INSTALLER.read_text(encoding="utf-8-sig")
+    tray = list(pyproject["project"]["gui-scripts"])[0]
 
     assert f"$ServiceName = '{service.SERVICE_NAME}'" in script
     assert "$PackageName = 'zabbixvms'" in script
     assert "zabbixvms-service.exe" in script
+    # The tray holds its own executable open, so the script has to close it before pip runs.
+    assert f"$TrayProcess = '{tray}'" in script
+    assert f"{tray}.exe" in script
 
 
 def test_the_offline_installer_is_readable_by_windows_powershell():

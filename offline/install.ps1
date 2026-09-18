@@ -20,6 +20,7 @@ $ErrorActionPreference = 'Stop'
 
 $ServiceName = 'ZabbixVms'
 $PackageName = 'zabbixvms'
+$TrayProcess = 'zabbixvms-tray'
 $ConfigFolder = 'C:\ProgramData\LogicElements\ZabbixVms'
 $Folder = $PSScriptRoot
 
@@ -42,6 +43,21 @@ function Get-InstalledVersion([string]$Python) {
             "print(next(iter([d.version for d in m.distributions() " +
             "if (d.metadata['Name'] or '').lower() == '$PackageName']), ''))"
     return Get-PythonOutput $Python $code
+}
+
+function Wait-ForRelease([string]$Path) {
+    # A process that has just been killed can hold its image open for a moment, and pip
+    # fails on a file it cannot replace.
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        if (-not (Test-Path $Path)) { return }
+        try {
+            $stream = [System.IO.File]::Open($Path, 'Open', 'ReadWrite', 'None')
+            $stream.Close()
+            return
+        } catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
 }
 
 function Start-Agent() {
@@ -76,6 +92,8 @@ if ($python.StartsWith($env:LOCALAPPDATA, [StringComparison]::OrdinalIgnoreCase)
     Write-Host ('VAROVÁNÍ: tenhle Python je nainstalovaný jen pro přihlášeného uživatele. ' +
         'Služba běží pod účtem LocalSystem a takovou instalaci nenajde.') -ForegroundColor Yellow
 }
+
+$scripts = Get-PythonOutput $python "import sysconfig; print(sysconfig.get_path('scripts'))"
 
 # --- packages in the folder ---------------------------------------------------------
 
@@ -147,6 +165,19 @@ if ($installed -and ($installed -ge $available) -and $service) {
 
 # --- replace the package ------------------------------------------------------------
 
+# The tray application keeps zabbixvms-tray.exe open and pip cannot replace a file that a
+# running process holds. It only displays the state of the service, so closing it loses
+# nothing; it is started again once the new package is in place.
+$trayExe = Join-Path $scripts 'zabbixvms-tray.exe'
+$tray = @(Get-Process -Name $TrayProcess -ErrorAction SilentlyContinue)
+$trayRan = $tray.Count -gt 0
+if ($trayRan) {
+    Write-Host 'Ukončuji tray aplikaci...'
+    Stop-Process -InputObject $tray -Force
+    Wait-Process -InputObject $tray -Timeout 30 -ErrorAction SilentlyContinue
+    Wait-ForRelease $trayExe
+}
+
 if ($service -and ($service.Status -ne 'Stopped')) {
     Write-Host 'Zastavuji službu...'
     Stop-Service -Name $ServiceName
@@ -168,7 +199,6 @@ if ($LASTEXITCODE -ne 0) {
 
 $fresh = $false
 if (-not $service) {
-    $scripts = Get-PythonOutput $python "import sysconfig; print(sysconfig.get_path('scripts'))"
     $agent = Join-Path $scripts 'zabbixvms-service.exe'
     if (-not (Test-Path $agent)) {
         Stop-WithError "Příkaz $agent po instalaci neexistuje."
@@ -182,6 +212,16 @@ if (-not $service) {
 }
 
 Start-Agent
+
+if ($trayRan) {
+    Write-Host 'Spouštím tray aplikaci...'
+    try {
+        Start-Process -FilePath $trayExe
+    } catch {
+        Write-Host ('VAROVÁNÍ: tray aplikaci se nepodařilo spustit (' + $_.Exception.Message +
+            '), nastartuje sama při příštím přihlášení.') -ForegroundColor Yellow
+    }
+}
 
 # --- report -------------------------------------------------------------------------
 
