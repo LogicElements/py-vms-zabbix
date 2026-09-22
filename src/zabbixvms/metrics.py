@@ -183,10 +183,12 @@ TRIGGERS = (
         blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
+        # Below AVERAGE on purpose: the trigger on vms.agent_error fires with this one and
+        # carries the text, so both above the mail threshold would send two mails per fault.
         name="Agent hlásí chybu nebo varování",
         key="vms.agent_status",
         condition="last({METRIC})>0",
-        priority="AVERAGE",
+        priority="WARNING",
     ),
     Trigger(
         name="Z hostu nepřišla žádná hodnota 5m",

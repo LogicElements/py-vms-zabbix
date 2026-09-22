@@ -142,11 +142,15 @@ def test_the_template_brings_the_triggers_of_the_catalog():
 
 
 def test_silence_weighs_more_than_a_reported_error():
-    """A host that says nothing may be a host whose agent is not running."""
+    """A host that says nothing may be a host whose agent is not running.
+
+    The gap widened once mail was set up for AVERAGE and above: the reported error is
+    below that threshold, silence well above it.
+    """
     priorities = {t["name"]: t["priority"] for t in exported_triggers()}
 
     assert priorities["Z hostu nepřišla žádná hodnota 5m"] == "HIGH"
-    assert priorities["Agent hlásí chybu nebo varování"] == "AVERAGE"
+    assert priorities["Agent hlásí chybu nebo varování"] == "WARNING"
 
 
 def test_trigger_on_a_status_above_zero():

@@ -140,3 +140,15 @@ def test_every_macro_a_condition_uses_is_declared():
             assert used in declared, f"{trigger.name}: {used}"
     # Without a condition that really uses one, the loop above proves nothing.
     assert found
+
+
+def test_the_state_trigger_stays_under_the_mail_threshold():
+    """Mail goes out from AVERAGE up, and the trigger on vms.agent_error fires together
+    with this one and carries the text, so both above the threshold would mail twice."""
+    state = next(trigger for trigger in TRIGGERS
+                 if trigger.key == "vms.agent_status"
+                 and trigger.condition.startswith("last("))
+    text = next(trigger for trigger in TRIGGERS if trigger.key == "vms.agent_error")
+
+    assert state.priority == "WARNING"
+    assert text.priority == "AVERAGE"

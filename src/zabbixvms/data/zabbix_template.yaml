@@ -108,7 +108,7 @@ zabbix_export:
       - uuid: 4839d6403cb443ca8ec1ea4948914e0a
         expression: last(/VMS zabbix agent/vms.agent_status)>0
         name: Agent hlásí chybu nebo varování
-        priority: AVERAGE
+        priority: WARNING
       - uuid: e03c986615a04339a63b8f99f03e7c24
         expression: nodata(/VMS zabbix agent/vms.agent_status,5m)=1
         name: Z hostu nepřišla žádná hodnota 5m

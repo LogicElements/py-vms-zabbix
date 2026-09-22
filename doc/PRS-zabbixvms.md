@@ -240,7 +240,7 @@ Sada metrik odesílaných do Zabbixu:
 - Agent sám v Zabbixu žádnou konfiguraci nezakládá a nepotřebuje přístup k Zabbix API.
 - Ve složce `doc/` je návod k nastavení Zabbixu pro tuto sadu metrik.
 - Návod popisuje založení hostu `<location>_<název turbíny>`, import šablony z balíčku a přiřazení šablony tomuto hostu.
-- Návod neobsahuje nic nad rámec těchto tří kroků.
+- Kromě těchto tří kroků návod popisuje nastavení, která se dělají na straně Zabbix serveru a týkají se téhle sady metrik: mez otáček a odesílání e-mailů při problému.
 - Návod je uvedený v rozcestníku v `README.md`.
 
 ## UC4 – Získávání hodnot metrik z databáze BVMS
@@ -349,7 +349,7 @@ Sada triggerů, které šablona obsahuje:
 | Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | – |
 | Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH | – |
 | Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
-| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | AVERAGE | – |
+| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | WARNING | – |
 | Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH | – |
 | Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE | – |
 
