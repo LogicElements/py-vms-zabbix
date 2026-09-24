@@ -17,9 +17,17 @@ Balíček vznikl vyčleněním z projektu [`pyvms`](https://github.com/LogicElem
 
 ## Instalace
 
-```bash
-pip install -e .
+Na serveru, kde má agent běžet, se balíček nainstaluje a pak se zaregistruje služba. Druhý
+příkaz zapisuje do registru, takže potřebuje **příkazovou řádku spuštěnou jako správce**:
+
 ```
+pip install .
+zabbixvms-service install
+```
+
+Registrace nastaví automatický start služby, práva k datové složce a spouštění tray
+aplikace po přihlášení uživatele. Na serveru bez přístupu k PyPI se instaluje ze složky
+`offline` – celý postup je v [BUILD-balicku.md](doc/BUILD-balicku.md).
 
 Běží pouze na Windows (pro integraci s Windows Service se používá `pywin32`).
 
@@ -36,6 +44,11 @@ Instalace vytvoří dva vstupní body:
 - `zabbixvms-service` – služba Windows `ZabbixVms`,
 - `zabbixvms-tray` – ikona v systray, spouští se bez konzolového okna.
 
+Jsou to programy ve složce `Scripts` toho Pythonu, do kterého se balíček nainstaloval.
+Příkazová řádka je zná jen tehdy, když je ta složka v `PATH`: u Pythonu nainstalovaného pro
+celý stroj to platí vždycky, u virtuálního prostředí až po jeho aktivaci. Hlášení
+`The term 'zabbixvms-service' is not recognized` znamená právě tohle, ne chybějící balíček.
+
 Konfigurace (přístupové údaje k MySQL a Zabbixu, seznam monitorovaných turbín) je JSON
 v souboru `C:\ProgramData\LogicElements\ZabbixVms\config.json`. Pokud soubor neexistuje,
 vytvoří se při prvním spuštění z výchozí šablony dodané v balíčku; existující soubor
@@ -43,12 +56,18 @@ zůstává beze změny i při aktualizaci balíčku.
 
 ## Vývoj
 
-Testy se spouští z kořene repozitáře:
+Ve vývojovém checkoutu se instaluje editovatelně do virtuálního prostředí a testy se
+spouští z kořene repozitáře:
 
-```bash
+```
+.\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 pytest
 ```
+
+Vstupní body pak leží v `.venv\Scripts`, takže bez aktivovaného prostředí je potřeba plná
+cesta – třeba `.\.venv\Scripts\zabbixvms-service.exe install`. Založení prostředí
+i nastavení, které aktivaci povolí, popisuje [BUILD-balicku.md](doc/BUILD-balicku.md).
 
 ## Licence
 
