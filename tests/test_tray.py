@@ -1,12 +1,13 @@
 """Tests of the tray application against faked objects: the colour of the icon, what
-the menu items do and which file Otevřít konfiguraci opens
+the menu items do and which folder Otevřít datovou složku opens
 (UC1-R5, UC1-R6, UC2-R8)."""
 
 import pytest
 import win32service
 
 from zabbixvms import tray as tray_module
-from zabbixvms.config import config_path
+from zabbixvms.log import log_path
+from zabbixvms.config import config_path, data_folder
 from zabbixvms.tray import (
     MENU,
     POLL_INTERVAL,
@@ -57,7 +58,7 @@ def make_app(state=win32service.SERVICE_STOPPED, confirm=True):
     controller = FakeController(state)
     icon = FakeIcon()
     opened = []
-    app = TrayApp(controller=controller, icon=icon, open_file=opened.append,
+    app = TrayApp(controller=controller, icon=icon, open_path=opened.append,
                   confirm_quit=lambda: confirm)
     return app, controller, icon, opened
 
@@ -113,7 +114,7 @@ def test_menu_has_its_items_in_order():
     app, _, _, _ = make_app()
 
     assert app.menu_labels == ("Spustit", "Zastavit", "Restartovat",
-                               "Otevřít konfiguraci", "Ukončit")
+                               "Otevřít datovou složku", "Ukončit")
 
 
 def test_start_item_starts_the_service():
@@ -153,13 +154,31 @@ def test_action_repaints_the_icon_at_once():
     assert icon.colors == [STOPPED_COLOR, RUNNING_COLOR]
 
 
-def test_configuration_item_opens_the_active_configuration():
-    """UC2-R8: the item opens the configuration file from ProgramData."""
+def test_data_folder_item_opens_the_folder_in_program_data():
+    """UC2-R8: the item opens the folder, not one of the files in it."""
+    data_folder().mkdir(parents=True, exist_ok=True)
     app, _, _, opened = make_app()
 
     app.invoke(3)
 
-    assert opened == [str(config_path())]
+    assert opened == [str(data_folder())]
+
+
+def test_a_missing_data_folder_opens_nothing(caplog):
+    """UC2-R8: an exception here would leave a window procedure with no console."""
+    assert not data_folder().exists()
+    app, _, _, opened = make_app()
+
+    app.invoke(3)
+
+    assert opened == []
+    assert "data folder" in caplog.text
+
+
+def test_the_opened_folder_is_where_the_configuration_and_the_log_are():
+    """UC2-R8: the item is only worth its name while both files are really in there."""
+    assert config_path().parent == data_folder()
+    assert log_path().parent == data_folder()
 
 
 def test_quit_item_ends_the_tray_once_confirmed():
@@ -235,7 +254,7 @@ def test_quit_leaves_the_service_alone():
 
 def test_quit_without_an_icon_is_harmless():
     """quit() before the icon exists must not fail."""
-    TrayApp(controller=FakeController(), open_file=lambda path: None,
+    TrayApp(controller=FakeController(), open_path=lambda path: None,
             confirm_quit=lambda: True).quit()
 
 

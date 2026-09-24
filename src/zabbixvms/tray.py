@@ -2,8 +2,8 @@
 
 The colour of the icon says whether the service is running, the state is asked for
 every five seconds and the menu starts, stops and restarts the service and opens the
-configuration. Everything runs unelevated: the rights the service grants ordinary
-users at registration are enough.
+folder holding the configuration and the log. Everything runs unelevated: the rights
+the service grants ordinary users at registration are enough.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import win32service
 import win32ui
 
 from zabbixvms import log as logging_setup
-from zabbixvms.config import config_path
+from zabbixvms.config import data_folder
 from zabbixvms.log import log
 from zabbixvms.service import DISPLAY_NAME
 from zabbixvms.servicecontrol import ServiceController
@@ -52,7 +52,7 @@ MENU = (
     ("Spustit", "start_service"),
     ("Zastavit", "stop_service"),
     ("Restartovat", "restart_service"),
-    ("Otevřít konfiguraci", "open_configuration"),
+    ("Otevřít datovou složku", "open_data_folder"),
     ("Ukončit", "quit"),
 )
 
@@ -89,10 +89,10 @@ class TrayApp:
     """The logic behind the icon: what colour it has and what the menu does."""
 
     def __init__(self, controller: ServiceController | None = None, icon=None,
-                 open_file=os.startfile, confirm_quit=ask_to_quit) -> None:
+                 open_path=os.startfile, confirm_quit=ask_to_quit) -> None:
         self._controller = controller if controller is not None else ServiceController()
         self._icon = icon
-        self._open_file = open_file
+        self._open_path = open_path
         self._confirm_quit = confirm_quit
         self._state = _UNKNOWN
 
@@ -128,9 +128,20 @@ class TrayApp:
         self._controller.restart()
         self.poll()
 
-    def open_configuration(self) -> None:
-        """Open the active configuration in whatever the system opens .json with."""
-        self._open_file(str(config_path()))
+    def open_data_folder(self) -> None:
+        """Open the folder that holds the configuration and the log.
+
+        The folder is there before the menu can be reached, since registering the service
+        creates it and so does setting the log up. Should it be gone anyway, say so in the
+        log rather than let the exception out: it would leave the window procedure of a
+        process that has no console, where nobody would ever see it.
+        """
+        folder = data_folder()
+        if not folder.is_dir():
+            log.warning("tray: the data folder %s is not there", folder)
+            return
+        log.info("tray: opening the data folder")
+        self._open_path(str(folder))
 
     def quit(self) -> None:
         """End the tray application, but ask first so a misclick costs nothing.

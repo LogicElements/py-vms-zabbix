@@ -135,18 +135,18 @@ Get-FileHash C:\ProgramData\LogicElements\ZabbixVms\config.json
 Úklid po ověření: `zabbixvms-service remove`.
 
 ### Etapa 5 – Tray aplikace
-**Účel:** Zobrazit stav služby ikonou v systray a umožnit z ní službu ovládat a otevřít konfiguraci.
+**Účel:** Zobrazit stav služby ikonou v systray a umožnit z ní službu ovládat a otevřít datovou složku.
 **Řeší:** UC1-R5, UC1-R6, UC1-R8, UC2-R8
 **Kroky:**
 1. Vytvořit `servicecontrol.py` s třídou `ServiceController`: zjištění stavu služby a její spuštění, zastavení a restart přes `win32service`.
 2. Implementovat v `tray.py` jednobarevnou ikonu přes `Shell_NotifyIcon` z `win32gui`, s názvem agenta v tooltipu.
 3. Odvodit barvu ikony ze stavu služby: jedna barva pro RUNNING, odlišná pro stav, kdy služba neběží.
 4. Zjišťovat stav služby s periodou 5 sekund a při jeho změně ikonu překreslit.
-5. Sestavit kontextové menu s položkami Spustit, Zastavit, Restartovat a Open configuration.
-6. Otevřít z položky Open configuration soubor `config_path()` v editoru přiřazeném systémem.
+5. Sestavit kontextové menu s položkami Spustit, Zastavit, Restartovat a Otevřít datovou složku.
+6. Otevřít z položky Otevřít datovou složku adresář `data_folder()`, ve kterém leží konfigurace i log.
 7. Zaregistrovat při instalaci automatické spuštění tray aplikace po přihlášení uživatele.
-8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Open configuration.
-9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření konfigurace bez výzvy UAC.
+8. Napsat testy proti podvrženým objektům: mapování stavu služby na barvu, volání start, stop a restart z položek menu, cesta otevíraná položkou Otevřít datovou složku.
+9. Ručně ověřit: ikona v systray po přihlášení, změna barvy do 5 sekund po `sc.exe stop`, všechny tři akce z menu a otevření datové složky bez výzvy UAC.
 
 **Stav:** kroky 1 až 8 jsou hotové, z kroku 9 prošly barvy ikony a tři akce z menu, takže
 UC1-R5 a UC1-R6 jsou Hotovo. UC2-R8 je Hotovo až po opravě práv k složce v `ProgramData` (viz etapa 6) – otevřít
@@ -159,7 +159,7 @@ Nad rámec PRS má menu ještě položku Ukončit, protože jinak nešla tray ap
 jinak než přes Správce úloh. Ptá se na potvrzení s předvybraným Ne, aby ji omylem
 netrefil klik ani Enter.
 
-Podle dohody jsou položky menu česky (Spustit, Zastavit, Restartovat, Otevřít konfiguraci),
+Podle dohody jsou položky menu česky (Spustit, Zastavit, Restartovat, Otevřít datovou složku),
 barvy jsou dvě (zelená běží, červená neběží, a to včetně stavu, kdy služba není nainstalovaná)
 a automatické spuštění se zapisuje do `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
 pod hodnotou `ZabbixVmsTray` při `zabbixvms-service install`; `remove` ji zase smaže.
@@ -175,9 +175,9 @@ sc.exe start ZabbixVms          # ikona zezelená do 5 s
 ```
 
 Z kontextového menu ikony vyzkoušet Spustit, Zastavit a Restartovat a výsledek ověřit
-příkazem `sc.exe query ZabbixVms` (UC1-R6); položka Otevřít konfiguraci musí otevřít
-`C:\ProgramData\LogicElements\ZabbixVms\config.json` v editoru přiřazeném k `.json`
-a nesmí vyvolat výzvu UAC (UC2-R8). Pro UC1-R8 restartovat server a po přihlášení
+příkazem `sc.exe query ZabbixVms` (UC1-R6); položka Otevřít datovou složku musí otevřít
+`C:\ProgramData\LogicElements\ZabbixVms` s konfigurací i logem uvnitř a nesmí vyvolat
+výzvu UAC (UC2-R8). Pro UC1-R8 restartovat server a po přihlášení
 zkontrolovat, že ikona je v systray. Po `zabbixvms-service remove` už hodnota
 `ZabbixVmsTray` v registru být nesmí.
 

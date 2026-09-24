@@ -44,7 +44,7 @@ Součástí sady jsou i testy proti prostředí, které jdou vynechat:
 Verze balíčku je na jediném místě, v `src/zabbixvms/__init__.py`:
 
 ```python
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 ```
 
 `pyproject.toml` si ji odtud bere (`dynamic = ["version"]`), takže se obě čísla nemají jak

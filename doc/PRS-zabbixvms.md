@@ -19,7 +19,7 @@
 | UC2-R5 | Turbína popsaná názvem, system_id a nejvýše dvěma buffery | Hotovo | tests/test_sender.py |
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
-| UC2-R8 | Otevření konfigurace k editaci z kontextového menu ikony | Hotovo | tests/test_tray.py |
+| UC2-R8 | Otevření datové složky z kontextového menu ikony | Zbývá | tests/test_tray.py |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
@@ -179,12 +179,12 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 - Instalace ani aktualizace balíčku obsah souboru v `ProgramData` nezmění.
 
 ### UC2-R8
-**Popis:** Konfiguraci lze otevřít k editaci z kontextového menu ikony v systray.
+**Popis:** Z kontextového menu ikony v systray lze otevřít datovou složku agenta, ve které leží konfigurace i log.
 **DoD:**
-- Kontextové menu ikony obsahuje položku Otevřít konfiguraci.
-- Volbou této položky se aktivní konfigurační soubor z `ProgramData` otevře v textovém editoru, který má systém přiřazený k souborům `.json`.
-- Po uložení změn a restartu služby agent pracuje podle nových hodnot.
-- Editace konfigurace nevyžaduje oprávnění administrátora.
+- Kontextové menu ikony obsahuje položku Otevřít datovou složku.
+- Volbou této položky se otevře složka `C:\ProgramData\LogicElements\ZabbixVms` a jsou v ní vidět konfigurační soubor i logovací soubor.
+- Konfiguraci lze z otevřené složky otevřít k editaci; po uložení změn a restartu služby agent pracuje podle nových hodnot.
+- Otevření složky ani editace konfigurace nevyžadují oprávnění administrátora.
 
 ## UC3 – Sada metrik odesílaných do Zabbixu
 

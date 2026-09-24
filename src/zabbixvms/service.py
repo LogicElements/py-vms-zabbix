@@ -20,7 +20,7 @@ import win32serviceutil
 
 from zabbixvms import log as logging_setup
 from zabbixvms.agent import Agent
-from zabbixvms.config import config_path, load_config
+from zabbixvms.config import data_folder, load_config
 from zabbixvms.log import log
 
 SERVICE_NAME = "ZabbixVms"
@@ -171,7 +171,7 @@ def grant_data_access(dacl, sid=USERS_SID, rights: int = DATA_RIGHTS):
 
 def grant_users_data_folder() -> Path:
     """Let ordinary users write the configuration and the log in ProgramData."""
-    folder = config_path().parent
+    folder = data_folder()
     folder.mkdir(parents=True, exist_ok=True)
 
     descriptor = win32security.GetNamedSecurityInfo(

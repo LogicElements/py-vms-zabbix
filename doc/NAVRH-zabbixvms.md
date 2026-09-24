@@ -47,7 +47,7 @@ src/zabbixvms/
 | `agent.py` | cyklus přes turbíny, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6 |
 | `service.py` | registrace a odregistrace služby, automatický start, oprávnění k ovládání | UC1-R2, UC1-R3, UC1-R7 |
 | `servicecontrol.py` | zjištění stavu služby a její spuštění, zastavení a restart | UC1-R5, UC1-R6 |
-| `tray.py` | ikona podle stavu služby, kontextové menu včetně otevření konfigurace | UC1-R5, UC1-R6, UC1-R8, UC2-R8 |
+| `tray.py` | ikona podle stavu služby, kontextové menu včetně otevření datové složky | UC1-R5, UC1-R6, UC1-R8, UC2-R8 |
 | `template.py` | šablona pro Zabbix vygenerovaná z katalogů metrik a triggerů | UC3-R4, UC5-R4 |
 
 ## Rozhodnutí

@@ -18,7 +18,7 @@ from pathlib import Path
 import win32evtlog
 import win32evtlogutil
 
-from zabbixvms.config import config_path
+from zabbixvms.config import data_folder
 
 LOG_FILENAME = "zabbixvms.log"
 
@@ -38,7 +38,7 @@ log = logging.getLogger("zabbixvms")
 
 def log_path() -> Path:
     """The log file lives in the same folder as the configuration."""
-    return config_path().parent / LOG_FILENAME
+    return data_folder() / LOG_FILENAME
 
 
 class SharedRotatingFileHandler(RotatingFileHandler):

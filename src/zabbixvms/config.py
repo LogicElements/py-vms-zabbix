@@ -133,10 +133,19 @@ class Config:
         path.write_text(jsonpickle.encode(self, indent=2, keys=True) + "\n", encoding="utf-8")
 
 
+def data_folder() -> Path:
+    """Folder in ProgramData that holds everything the agent writes.
+
+    The configuration, the log and the rights the installation grants all point here,
+    and so does the item of the tray menu that opens it.
+    """
+    program_data = os.environ.get("ProgramData", r"C:\ProgramData")
+    return Path(program_data) / PROGRAM_DATA_SUBDIR
+
+
 def config_path() -> Path:
     """Path of the active configuration file in ProgramData."""
-    program_data = os.environ.get("ProgramData", r"C:\ProgramData")
-    return Path(program_data) / PROGRAM_DATA_SUBDIR / CONFIG_FILENAME
+    return data_folder() / CONFIG_FILENAME
 
 
 def default_config_bytes() -> bytes:

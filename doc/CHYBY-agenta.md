@@ -11,6 +11,9 @@ Přehled toho, co agent hlásí, kde chyby vznikají a kde k nim hledat podrobno
 | `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log` | tentýž text v plném znění, s časem a úrovní |
 | Windows Event Log, zdroj `ZabbixVms` | jen start a zastavení služby a chyby, které brání jejímu běhu |
 
+Ke složce s logem se nejrychleji dostanete z kontextového menu ikony v systray položkou
+**Otevřít datovou složku**; leží v ní log i konfigurace.
+
 Log je vždy úplnější zdroj než `vms.agent_error`: není zkrácený a drží i historii, ne
 jen poslední událost.
 
