@@ -252,7 +252,7 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 
 | Klíč metriky | Zdroj | Vstup | Pole zdroje | Výpočet |
 | --- | --- | --- | --- | --- |
-| `vms.speed` | řádek `info` turbíny | `info`, `system_id` | `Phase_Marker` | `1e8 / Phase_Marker * 60` |
+| `vms.speed` | řádek `info` turbíny | `info`, `system_id` | `Phase_Marker` | `1e8 / Phase_Marker * 60`; výsledek menší než 3 rpm se hlásí jako 0 |
 | `vms.info_age` | řádek `info` turbíny | `info`, `system_id` | `Date` | celé sekundy mezi `Date` a časem měření |
 | `vms.timestamp_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Timestamp` | celé sekundy mezi `Date_Timestamp` a časem měření |
 | `vms.config_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Config` | celé sekundy mezi `Date_Config` a časem měření |

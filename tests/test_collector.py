@@ -11,6 +11,7 @@ from zabbixvms.collector import (
     INFO_COLUMNS,
     MAX_AGE,
     MAX_AGE_SECONDS,
+    MIN_SPEED,
     Collector,
     CollectorError,
     age,
@@ -98,6 +99,22 @@ def test_speed_from_the_phase_marker():
 def test_speed_of_a_standing_turbine_is_zero(phase_marker):
     """A turbine that does not turn has no phase marker period."""
     assert speed(phase_marker) == 0.0
+
+
+def test_a_speed_under_the_floor_is_zero():
+    """UC4-R1: the phase marker ticks even at a standstill, and what that yields is
+    noise; below MIN_SPEED it is reported as a turbine that does not turn."""
+    slow = int(1e8 * 60 / (MIN_SPEED / 2))
+
+    assert 0 < 1e8 / slow * 60 < MIN_SPEED, "the fixture has to be under the floor"
+    assert speed(slow) == 0.0
+
+
+def test_the_floor_itself_still_counts_as_turning():
+    """UC4-R1: only a speed under the floor is flattened, the floor is a real value."""
+    at_the_floor = int(1e8 * 60 / MIN_SPEED)
+
+    assert speed(at_the_floor) == MIN_SPEED
 
 
 def test_age_is_whole_seconds():

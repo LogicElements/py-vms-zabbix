@@ -40,14 +40,22 @@ class CollectorError(Exception):
     """The database does not hold what the agent needs for a turbine."""
 
 
+# Under this the turbine is standing. A standstill does not always leave the phase marker
+# period empty: the electronics writes 2147483647, the largest a 32 bit number holds, and
+# the computation turns that into 2.794 rpm. It is noise, not a turbine turning slowly.
+MIN_SPEED = 3.0
+
+
 def speed(phase_marker: int | None) -> float:
     """Turbine speed in rpm from the phase marker period.
 
-    A standing turbine has no phase marker period, the speed is 0 rpm then.
+    A standing turbine has no phase marker period, the speed is 0 rpm then, and so is
+    anything the computation puts under MIN_SPEED.
     """
     if not phase_marker:
         return 0.0
-    return round(1e8 / phase_marker * 60, 4)
+    turning = round(1e8 / phase_marker * 60, 4)
+    return turning if turning >= MIN_SPEED else 0.0
 
 
 def age(moment: datetime | None, now: datetime) -> int:
