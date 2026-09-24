@@ -335,7 +335,8 @@ logovacího souboru a ty zásadní i do Windows Event Logu.
 **Popis:** Agent odesílá svůj vlastní stav do Zabbixu jako dvojici metrik.
 **DoD:**
 - V každém cyklu odešle agent `vms.agent_status` a `vms.agent_error` na každý host turbíny, kterou má v konfiguraci.
-- `vms.agent_status` má hodnotu 0, proběhl-li celý cyklus bez chyby, 1 při varování, po kterém agent pokračuje, a 2 při chybě, která mu brání získat nebo odeslat hodnoty metrik.
+- `vms.agent_status` má hodnotu 0, proběhl-li celý cyklus bez chyby, 1 při varování, po kterém agent pokračuje, a 2 při chybě, která mu brání získat hodnoty metrik nebo kvůli které je Zabbix odmítne.
+- Nedostupnost Zabbix serveru se do metrik nehlásí vůbec: hlášení by k němu dorazilo až po obnovení spojení, kdy už popisuje něco, co skončilo. Agent takový cyklus přejde a po pěti neúspěšných cyklech za sebou o tom napíše do logu; v Zabbixu se výpadek pozná chybějícími daty.
 - `vms.agent_error` nese text poslední chyby nebo varování; při stavu 0 je prázdný.
 - Text chyby odpovídá záznamu v logovacím souboru a zkracuje se na 255 znaků, aby se vešel do položky typu Character.
 

@@ -9,6 +9,7 @@ import pytest
 from zabbixvms.log import log as agent_log
 from zabbixvms.agent import (
     CYCLE_DELAY,
+    TOLERATED_SEND_FAILURES,
     ERROR,
     ERROR_KEY,
     MAX_ERROR_LENGTH,
@@ -18,6 +19,7 @@ from zabbixvms.agent import (
     Agent,
 )
 from zabbixvms.config import Config, Turbine, ZabbixConfig
+from zabbixvms.sender import ZabbixUnreachable
 
 
 class FakeCollector:
@@ -52,9 +54,12 @@ class FakeCollector:
 class FakeSender:
     """Keeps the metric values and the state of the agent apart, as two sends."""
 
-    def __init__(self, fail_on=(), fail_state=False):
+    def __init__(self, fail_on=(), fail_state=False, unreachable_on=()):
         self.fail_on = set(fail_on)
         self.fail_state = fail_state
+        # Cycles in which the values do not get to Zabbix at all, as opposed to fail_on,
+        # where they arrive and are turned down.
+        self.unreachable_on = set(unreachable_on)
         self.sent = []
         self.states = []
 
@@ -65,6 +70,9 @@ class FakeSender:
                 raise RuntimeError("Zabbix is away")
             return
         self.sent.append((turbine.name, values))
+        if len(self.sent) in self.unreachable_on:
+            raise ZabbixUnreachable(
+                "Couldn't connect to all of cluster nodes: [zabbix.example.com:10051]")
         if len(self.sent) in self.fail_on:
             raise RuntimeError("Zabbix is away")
 
@@ -385,3 +393,65 @@ def test_warning_is_written_to_the_log(written_records):
 
     assert any(record.levelno == logging.WARNING and "tabulka chybí" in record.getMessage()
                for record in written_records)
+
+
+def test_an_unreachable_zabbix_is_not_reported_as_an_error():
+    """UC5-R3: the report could only travel once the connection is back, when it is
+    stale, so nothing about the outage is published at all."""
+    sender = FakeSender(unreachable_on=[1])
+    agent, _ = make_agent(sender=sender, cycles=1)
+
+    agent.run()
+
+    assert agent.status == OK
+    assert agent.error_text == ""
+    assert sender.states == []
+
+
+def test_a_short_outage_leaves_the_log_alone(caplog):
+    """UC5-R3: fewer failures in a row than the agent tolerates say nothing anywhere."""
+    sender = FakeSender(unreachable_on=range(1, TOLERATED_SEND_FAILURES))
+    agent, _ = make_agent(sender=sender, cycles=TOLERATED_SEND_FAILURES - 1)
+
+    with caplog.at_level(logging.ERROR, logger=agent_log.name):
+        agent.run()
+
+    assert agent.failed_sends == TOLERATED_SEND_FAILURES - 1
+    assert caplog.records == []
+
+
+def test_an_outage_that_keeps_going_reaches_the_log_once(caplog):
+    """UC5-R3: the log says so on the agreed failure, and does not repeat itself."""
+    sender = FakeSender(unreachable_on=range(1, TOLERATED_SEND_FAILURES + 3))
+    agent, _ = make_agent(sender=sender, cycles=TOLERATED_SEND_FAILURES + 2)
+
+    with caplog.at_level(logging.ERROR, logger=agent_log.name):
+        agent.run()
+
+    errors = [record for record in caplog.records if record.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "Zabbix" in errors[0].getMessage()
+
+
+def test_values_getting_through_again_start_the_count_afresh():
+    """UC5-R3: outages are counted in a row, so one success wipes the tally."""
+    sender = FakeSender(unreachable_on=[1, 3])
+    agent, _ = make_agent(sender=sender, cycles=3)
+
+    agent.run()
+
+    assert agent.failed_sends == 1
+    assert agent.status == OK
+
+
+def test_rejected_values_are_still_an_error():
+    """UC5-R3: a host Zabbix does not know is a fault somebody has to fix, and saying
+    so works, because the connection to Zabbix is up."""
+    sender = FakeSender(fail_on=[1])
+    agent, _ = make_agent(sender=sender, cycles=1)
+
+    agent.run()
+
+    assert agent.status == ERROR
+    assert sender.states != []
+

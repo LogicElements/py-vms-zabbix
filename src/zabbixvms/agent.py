@@ -14,7 +14,7 @@ import time
 from zabbixvms.collector import Collector
 from zabbixvms.config import DEFAULT_PERIOD, Config
 from zabbixvms.log import log
-from zabbixvms.sender import TrapperSender
+from zabbixvms.sender import TrapperSender, ZabbixUnreachable
 
 # Delay between the end of one measurement cycle and the start of the next; it comes
 # from the configuration, this is what an agent without one would wait.
@@ -31,6 +31,12 @@ MAX_ERROR_LENGTH = 255
 STATUS_KEY = "vms.agent_status"
 ERROR_KEY = "vms.agent_error"
 
+# How many cycles in a row may fail to reach Zabbix before the log says so. A blip is
+# worth nothing to anybody: the report of it could only travel once the connection is
+# back, by which time it describes something that is over. Zabbix sees a real outage as
+# a host that went quiet, which is what the trigger on missing data is for.
+TOLERATED_SEND_FAILURES = 5
+
 
 class Agent:
     """Runs the measurement cycle over all turbines of the configuration."""
@@ -45,6 +51,8 @@ class Agent:
         self._warnings: list[str] = []
         # Error of the last cycle, or None when the last cycle went through.
         self.last_error: Exception | None = None
+        # Cycles in a row whose values did not reach Zabbix; zero once one gets there.
+        self.failed_sends = 0
         # What the agent said about itself in the last cycle.
         self.status = OK
         self.error_text = ""
@@ -76,17 +84,42 @@ class Agent:
                 self.cycle()
                 self.last_error = None
                 status, message = self._state_of_the_cycle()
+            except ZabbixUnreachable as err:
+                self._tolerate_unreachable(err)
+                self._sleep(self.period)
+                continue
             except Exception as err:
                 # The loop outlives the cycle; the database or Zabbix may come back.
                 self.last_error = err
                 status, message = ERROR, str(err)
                 log.error("measurement cycle failed: %s", err)
                 self._collector.close()
+            else:
+                self._forget_unreachable()
 
             self.status = status
             self.error_text = message[:MAX_ERROR_LENGTH]
             self.report_state()
             self._sleep(self.period)
+
+    def _tolerate_unreachable(self, err: Exception) -> None:
+        """Count a cycle whose values never arrived, and say nothing to Zabbix.
+
+        Saying anything is impossible anyway while the connection is down, and once it
+        is up the news is stale. The database connection stays open: it is not the one
+        that broke.
+        """
+        self.failed_sends += 1
+        if self.failed_sends == TOLERATED_SEND_FAILURES:
+            log.error("values have not reached Zabbix in %d cycles in a row: %s",
+                      self.failed_sends, err)
+
+    def _forget_unreachable(self) -> None:
+        """Note that the values are getting through again and start counting afresh."""
+        if self.failed_sends >= TOLERATED_SEND_FAILURES:
+            log.info("values are reaching Zabbix again after %d cycles",
+                     self.failed_sends)
+        self.failed_sends = 0
 
     def stop(self) -> None:
         """Ask the loop to finish and release the database connection."""

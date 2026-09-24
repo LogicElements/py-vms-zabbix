@@ -45,8 +45,8 @@ dál a další cyklus to zkusí znovu.
 
 - chyby `mysql-connector-python` při připojení nebo dotazu: MySQL neběží, špatné
   uživatelské jméno či heslo, neexistující databáze nebo informační tabulka, síť
-- chyby `zabbix_utils` při odesílání: Zabbix server je nedostupný, odmítne spojení nebo
-  vyprší časový limit
+- chyby `zabbix_utils` při odesílání, které nejsou o dostupnosti serveru: nečitelná
+  odpověď trapperu nebo selhání při vytváření socketu
 
 ## Stav 1 — varování
 
@@ -73,6 +73,18 @@ chyba: mlčící host může znamenat, že agent vůbec neběží.
 Trigger má pevné okno 5 minut, kdežto prodleva mezi cykly se nastavuje v konfiguraci
 (5 až 120 sekund). Při krátké prodlevě se do okna vejde mnoho cyklů, při prodlevě 120 s
 už jen dva a půl — počítejte s tím, že při dlouhých prodlevách trigger reaguje citlivěji.
+
+### Nedostupný Zabbix
+
+Když se agent na Zabbix vůbec nedovolá – server neběží, odmítne spojení nebo vyprší časový
+limit – **nehlásí to jako chybu agenta**. Nemá totiž kudy: hlášení by odešlo až po obnovení
+spojení a popisovalo by výpadek, který už skončil. Cyklus se přejde a zkusí se znovu za
+periodu.
+
+Po pěti takových cyklech za sebou se do logu zapíše jeden záznam a další přibude, až se
+odesílání zase rozběhne, takže je z logu vidět i to, jak dlouho výpadek trval. V Zabbixu se
+delší výpadek projeví triggerem „Z hostu nepřišla žádná hodnota 5m“; krátké zaškobrtnutí se
+v něm neprojeví vůbec, což je záměr.
 
 ### Stojící turbína není chyba
 
