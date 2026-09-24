@@ -60,6 +60,24 @@ function Wait-ForRelease([string]$Path) {
     }
 }
 
+function Test-Elevated() {
+    $identity = [Security.Principal.WindowsPrincipal] `
+        [Security.Principal.WindowsIdentity]::GetCurrent()
+    return $identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Test-Writable([string]$Folder) {
+    # Asking the rights themselves is unreliable, writing a file is not.
+    try {
+        $probe = Join-Path $Folder ([guid]::NewGuid().ToString() + '.tmp')
+        [System.IO.File]::WriteAllText($probe, '')
+        Remove-Item $probe -Force
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Start-Agent() {
     Write-Host 'Spouštím službu...'
     try {
@@ -69,14 +87,6 @@ function Start-Agent() {
         Stop-WithError ("Služba nenastartovala: " + $_.Exception.Message + " Podívejte se do " +
             "$ConfigFolder\zabbixvms.log a do Event Logu Windows.")
     }
-}
-
-# --- rights -------------------------------------------------------------------------
-
-$identity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-if (-not $identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Stop-WithError ('Skript potřebuje práva správce. Otevřete PowerShell přes ' +
-        '"Spustit jako správce" a spusťte ho znovu.')
 }
 
 # --- interpreter --------------------------------------------------------------------
@@ -94,6 +104,7 @@ if ($python.StartsWith($env:LOCALAPPDATA, [StringComparison]::OrdinalIgnoreCase)
 }
 
 $scripts = Get-PythonOutput $python "import sysconfig; print(sysconfig.get_path('scripts'))"
+$purelib = Get-PythonOutput $python "import sysconfig; print(sysconfig.get_path('purelib'))"
 
 # --- packages in the folder ---------------------------------------------------------
 
@@ -161,6 +172,23 @@ if ($installed -and ($installed -ge $available) -and $service) {
         Write-Host 'Služba běží, není co dělat.'
     }
     exit 0
+}
+
+# --- rights, only for what this run really does --------------------------------------
+
+# Stopping and starting the service needs no elevation: registering it grants ordinary
+# users the right to do both. Replacing the package does, whenever the interpreter lives
+# somewhere only an administrator may write, which is where a machine-wide Python is.
+foreach ($target in @($purelib, $scripts)) {
+    if (-not (Test-Writable $target)) {
+        Stop-WithError ("Do $target nelze zapisovat, takže balíček vyměnit nejde. " +
+            "Spusťte skript z PowerShellu otevřeného přes volbu Spustit jako správce.")
+    }
+}
+
+if ((-not $service) -and (-not (Test-Elevated))) {
+    Stop-WithError ('Služba ještě není zaregistrovaná a její registrace potřebuje práva ' +
+        'správce. Spusťte skript z PowerShellu otevřeného přes volbu Spustit jako správce.')
 }
 
 # --- replace the package ------------------------------------------------------------

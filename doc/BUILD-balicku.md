@@ -139,8 +139,8 @@ Celou složku `offline` zkopírujte na server, třeba na `C:\install\offline`.
 
 ### 3. Nainstalovat bez sítě
 
-Ve složce leží skript `install.ps1`, který instalaci i aktualizaci provede sám. Spusťte ho
-**jako správce**:
+Ve složce leží skript `install.ps1`, který instalaci i aktualizaci provede sám. První
+nasazení spusťte **jako správce**, protože registrace služby to vyžaduje:
 
 ```
 powershell -ExecutionPolicy Bypass -File C:\install\offline\install.ps1
@@ -155,8 +155,17 @@ serveru zastihne:
   `zabbixvms` a službu i tray zase spustí,
 - **je tam stejná nebo novější verze** – nechá ji být a jen dohlédne, že služba běží.
 
-Než cokoli změní, ověří, že běží s právy správce, že je v `PATH` Python a že wheely ve složce
-patří k jeho verzi. Když něco z toho neplatí, skončí s vysvětlením a nic neudělá.
+Než cokoli změní, ověří, že je v `PATH` Python a že wheely ve složce patří k jeho verzi.
+Když něco z toho neplatí, skončí s vysvětlením a nic neudělá.
+
+**Práva správce si vyžádá jen na to, co je opravdu potřebuje**, ne paušálně na celý běh.
+Zastavit a spustit službu smějí běžní uživatelé — registrace jim to právo dala — takže běh,
+který jen dohlédne na běžící službu, projde bez elevace. Elevaci si skript vyžádá ve dvou
+případech: když služba ještě není zaregistrovaná, a když do složek, kam pip balíček
+zapisuje, zapsat nejde. To druhé nastane u Pythonu nainstalovaného pro celý stroj, protože
+jeho `site-packages` leží v `Program Files`, kam běžný uživatel psát nesmí — tam si tedy
+aktualizace elevaci vyžádá dál. Skript to nehádá z toho, jestli běží jako správce, ale
+zkusí do cílové složky zapsat.
 
 Tray aplikaci skript spouští znovu ve svém vlastním sezení. Když běžela pod jiným přihlášeným
 uživatelem, tomu se sama vrátí až při jeho příštím přihlášení.
