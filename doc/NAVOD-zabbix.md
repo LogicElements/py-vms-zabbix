@@ -45,7 +45,8 @@ takže se po dobu jeho aktivity neuplatní.
 
 Jakmile zapnete odesílání e-mailů podle kapitoly 5, má to ale jeden důsledek: priorita
 Average dostane tenhle trigger nad prahovou hodnotu, takže při každém zastavení turbíny
-přijde mail. Je to záměr, ne chyba nastavení – podrobnosti v 5.4.
+přijde mail. Je to záměr, ne chyba nastavení; když to u některé turbíny vadí, jde ji
+z rozesílání vyjmout podle 5.4.
 
 Ostatní triggery hlásí bez ohledu na otáčky: databáze VMS setupu i oba sockety se plní
 i za klidu a přeplněný buffer je problém taky. Kdyby se ukázalo, že další trigger má za
@@ -108,30 +109,7 @@ se na jednom místě, kdežto výběr závažností u uživatele je jen druhá b
 ubrat, ne přidat. Nově založený uživatel má navíc zaškrtnuté všechny závažnosti, takže
 kdyby byla mez jen tam, dostával by i Warning a Information.
 
-### 5.4 Co při takovém nastavení bude chodit
-
-| Trigger | Priorita | Pošle mail |
-| --- | --- | --- |
-| *Turbína pod nominálními otáčkami* | Average | ano – **při každém zastavení turbíny** |
-| *Chyba databáze VMS setupu* | High | ano |
-| *Chyba timestamp socketu* | High | ano |
-| *Chyba konfiguračního socketu* | High | ano |
-| *Chyba SW analýzy čtení bufferu* | High | ano |
-| *Chyba ukládání do bufferu* | High | ano, ale ne když turbína stojí (závislost, kapitola 4) |
-| *Agent hlásí chybu nebo varování* | Warning | ne, je pod mezí |
-| *Z hostu nepřišla žádná hodnota 5m* | High | ano |
-| *Chyba agenta* | Average | ano, a rovnou s textem chyby |
-
-Za pozornost stojí dva řádky. *Turbína pod nominálními otáčkami* je Average záměrně, takže
-mail přijde pokaždé, když turbína zastaví – je to cena za jedno jednoduché pravidlo pro
-všechny hosty. A dvojice triggerů nad stavem agenta je rozdělená schválně: stavový je
-Warning, aby z jedné chyby nechodily dva maily, a ten, který dorazí, nese rovnou i text
-chyby.
-
-V Zabbixu se priority píší s velkým počátečním písmenem (*Average*), kdežto v šabloně
-a v [PRS](PRS-zabbixvms.md) velkými písmeny (`AVERAGE`). Je to totéž.
-
-### 5.5 Vypnout maily jednomu hostu
+### 5.4 Vypnout maily jednomu hostu
 
 Testovací turbína může zůstat ve skupině `VMS` a přesto nemailovat. Hostu přidejte tag,
 třeba `mail` s hodnotou `off`, a akci z 5.3 dejte podmínku navíc: hodnota tagu `mail`
@@ -146,24 +124,3 @@ pozastavené.
 
 Pro jednoho dva hosty jde do akce dát rovnou podmínku, že host není `LE_TEST`. Je to
 nejrychlejší cesta, ale při každém dalším hostu se akce musí znovu upravit.
-
-### 5.6 Když nic nechodí
-
-Zabbix mlčení nehlásí jako chybu, takže se hledá vylučovací metodou.
-
-**Reports → Action log** je nejužitečnější místo – vypisuje jednotlivé notifikace
-s příjemcem, stavem (Sent / Failed) a textem chyby. Když tam po problému není žádný řádek,
-notifikace vůbec nevznikla a na vině bývá oprávnění z 5.2, zakázaná akce nebo nesplněná
-podmínka. Když tam řádek je a je Failed, chyba je v nastavení SMTP z 5.1.
-
-Tlačítko **Test** u media typu ověří cestu ze **Zabbix serveru** na SMTP relay, ale obchází
-akce, média i oprávnění, takže prochází jen kapitolu 5.1. A stav Sent znamená pouze to, že
-relay poštu přijal; co se s ní stane dál, Zabbix nevidí. Skutečnou zkouškou je mail ve
-schránce.
-
-Tiše to umí zastavit i příliš úzké časové okno u média, host v údržbovém okně a u *Chyby
-ukládání do bufferu* závislost z kapitoly 4 – při stojící turbíně ten problém vůbec
-nevznikne, takže není co poslat.
-
-Názvy polí se mezi menšími verzemi Zabbixu liší; když některé pod uvedeným názvem
-nenajdete, hledejte ho na téže stránce pod podobným.
