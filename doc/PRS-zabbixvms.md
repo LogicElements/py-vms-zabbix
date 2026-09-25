@@ -21,7 +21,7 @@
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření datové složky z kontextového menu ikony | Hotovo | tests/test_tray.py |
 | UC2-R9 | Chybějící položku doplní výchozí hodnota jen u položek z novějších verzí | Hotovo | tests/test_config.py |
-| UC2-R10 | Zápis nových položek do konfigurace při aktualizaci instalačním skriptem | Zbývá | |
+| UC2-R10 | Zápis nových položek do konfigurace při aktualizaci instalačním skriptem | Hotovo | tests/test_config.py, tests/test_service.py |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |

@@ -26,8 +26,8 @@
 | 5 | Tray aplikace | [x] |
 | 6 | Logování a vlastní stav agenta | [x] |
 | 7 | Šablona pro Zabbix a návod | [x] |
-| 8 | Sledování surových dat | [ ] |
-| 9 | Doplňování konfigurace | [ ] |
+| 8 | Sledování surových dat | [x] |
+| 9 | Doplňování konfigurace | [x] |
 | 10 | Aktuální statistiky z information_schema | [ ] |
 | 11 | Připojení bez otevřené transakce | [ ] |
 
@@ -289,10 +289,11 @@ trapper, value map u `vms.agent_status` a tři triggery.
 12. Zvýšit verzi balíčku na 0.2.0.
 13. Ručně ověřit import šablony do Zabbixu: dvě nové položky, dva triggery a závislost triggeru na zápis na triggeru Turbína pod nominálními otáčkami.
 
-**Stav:** kroky 1 až 12 jsou hotové. Testy prošly včetně databázových proti lokální `BVMS`
-(MySQL 5.7.17), takže UC6-R1 až UC6-R4 jsou Hotovo. Zbývá krok 13, reimport šablony do
-Zabbixu; do té doby zůstává etapa nezaškrtnutá. Šablona přibrala jen nové položky a triggery,
-stávající objekty i jejich uuid se nezměnily.
+**Stav:** hotovo. Testy prošly včetně databázových proti lokální `BVMS` (MySQL 5.7.17),
+takže UC6-R1 až UC6-R4 jsou Hotovo. Ruční krok 13 prošel: šablona se do Zabbixu
+naimportovala a trigger na zápis surových dat je závislý na triggeru Turbína pod
+nominálními otáčkami. Šablona přibrala jen nové položky a triggery, stávající objekty
+i jejich uuid se nezměnily.
 
 Proti skutečným tabulkám surových dat se agent ověřil na serveru s VMS i TVMS (turbíny TG11
 a TG12, každá s prefixem `btt_tgXY` a `tgXY_out`). Do Zabbixu tam chodí `vms.raw_tables` = 1
@@ -320,8 +321,9 @@ soubor v `src` starý.
 
 **Stav:** kroky 1 až 8 jsou hotové a testy prošly, takže UC2-R9 je Hotovo. UC2-R7 měl
 upřesněné DoD o výjimku pro instalační skript, a protože se tím jeho stávající testy
-nezměnily, je zase Hotovo. UC2-R10 zůstává Zbývá do ručního ověření v kroku 9: Python
-část je otestovaná, `install.ps1` se zatím jen zkontroloval parserem PowerShellu.
+nezměnily, je zase Hotovo. Ruční krok 9 prošel: aktualizace přes `install.ps1` doplnila
+do konfigurace starší verze nová pole a nechala vedle `config.json.bak`, takže UC2-R10 je
+Hotovo. Python část drží testy, samotný `install.ps1` jen to ruční ověření.
 Příkaz `complete-config` se vyzkoušel na souboru ve tvaru z verze 0.1.x v dočasné
 složce: doplnil `period` a oba `raw_prefixes` a druhý běh už nic nezměnil.
 
