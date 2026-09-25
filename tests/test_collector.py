@@ -1,6 +1,7 @@
 """Tests of the collector against faked database objects: the computations of the
 source table, the -1 limit, the zeros of an unconfigured buffer and the raw data tables
-(UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC4-R7, UC3-R3, UC6-R2, UC6-R3, UC6-R4)."""
+(UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC4-R7, UC4-R8, UC3-R3, UC6-R2,
+UC6-R3, UC6-R4)."""
 
 import re
 from datetime import datetime, timedelta
@@ -621,7 +622,8 @@ def test_connect_uses_the_values_from_the_configuration():
     Collector(config, connect=connect).connect()
 
     assert captured == {"host": "db.example.com", "database": "BVMS2",
-                        "user": "reader", "password": "secret", "use_pure": True}
+                        "user": "reader", "password": "secret", "use_pure": True,
+                        "autocommit": True}
 
 
 def test_connect_stays_away_from_the_c_extension():
@@ -635,6 +637,21 @@ def test_connect_stays_away_from_the_c_extension():
     Collector(DatabaseConfig(), connect=connect).connect()
 
     assert captured["use_pure"] is True
+
+
+def test_no_transaction_is_left_open_between_queries():
+    """UC4-R8: an open transaction would answer every query from the snapshot of its
+    first one, information_schema of MySQL 8 included, so a raw data table created
+    while the agent runs would never be seen."""
+    captured = {}
+
+    def connect(**kwargs):
+        captured.update(kwargs)
+        return FakeConnection()
+
+    Collector(DatabaseConfig(), connect=connect).connect()
+
+    assert captured["autocommit"] is True
 
 
 def test_close_releases_the_connection():

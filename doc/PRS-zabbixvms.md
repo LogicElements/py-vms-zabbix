@@ -33,6 +33,7 @@
 | UC4-R5 | Buffery: stáří jako maximum, bulk a řádky jako součet přes nastavené buffery | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva mezi cykly měření nastavitelná v rozsahu 5 až 120 sekund | Hotovo | tests/test_agent.py |
 | UC4-R7 | Hodnoty z `information_schema` aktuální, ne z mezipaměti statistik MySQL 8 | Zbývá | |
+| UC4-R8 | Každý dotaz agenta vidí databázi v aktuálním stavu, ne snímek otevřené transakce | Zbývá | |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
@@ -345,6 +346,13 @@ hodnoty metrik a odešle je do Zabbixu. Zdroj každé metriky určuje tabulka n�
 - Nastavení platí jen pro připojení agenta, globální nastavení serveru se nemění.
 - Nastavení se obnoví při každém novém připojení agenta k databázi.
 - Na serveru, který tuto proměnnou nezná (MySQL 5.7), se agent připojí a pracuje beze změny.
+
+### UC4-R8
+**Popis:** Každý dotaz agenta vidí databázi v aktuálním stavu, ne snímek z počátku otevřené transakce.
+**DoD:**
+- Připojení agenta k MySQL pracuje v režimu autocommit, takže agent nedrží otevřenou transakci a každý dotaz vidí data potvrzená do chvíle svého spuštění.
+- Tabulka surových dat založená nebo smazaná za běhu agenta se v hodnotách projeví v nejbližším cyklu, bez restartu služby a bez nového připojení.
+- Totéž platí pro řádek informační tabulky a pro buffery uložené v InnoDB.
 
 ## UC5 – Hlášení chyb a provozních událostí
 

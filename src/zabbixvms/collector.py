@@ -158,6 +158,13 @@ class Collector:
             # The pure Python implementation never calls into libmysql, and a handful
             # of rows per period does not need the speed of the C extension.
             use_pure=True,
+            # Every query has to see the database as it is now. The connector leaves
+            # autocommit off, so the first query would open a transaction the agent,
+            # only reading, never ends, and InnoDB would answer every later query from
+            # the snapshot taken at its start. On MySQL 8 that goes for
+            # information_schema too, whose tables are InnoDB: a raw data table created
+            # since would stay unseen and a dropped one would still be counted.
+            autocommit=True,
         )
         self._read_live_statistics()
 

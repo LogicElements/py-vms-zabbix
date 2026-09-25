@@ -1,5 +1,5 @@
 """Tests of the collector against the BVMS test database. They are skipped when
-no such database is reachable (UC4-R2, UC4-R3, UC4-R5, UC6-R2)."""
+no such database is reachable (UC4-R2, UC4-R3, UC4-R5, UC4-R8, UC6-R2)."""
 
 from datetime import datetime
 
@@ -138,6 +138,11 @@ def test_tables_that_only_start_like_a_prefix_are_not_raw_data(collector, raw, d
     turbine = Turbine(name="TG", system_id=1, raw_prefixes=["buffer_le"])
 
     assert collector.read_raw_tables(turbine) == {"buffer_le": []}
+
+
+def test_the_connection_of_the_agent_commits_every_query(collector):
+    """UC4-R8: no transaction stays open, so no snapshot outlives its query."""
+    assert collector._connection.autocommit is True
 
 
 def test_collect_fills_the_catalog_from_the_database(collector, system_ids):

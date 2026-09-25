@@ -29,6 +29,7 @@
 | 8 | Sledování surových dat | [ ] |
 | 9 | Doplňování konfigurace | [ ] |
 | 10 | Aktuální statistiky z information_schema | [ ] |
+| 11 | Připojení bez otevřené transakce | [ ] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -349,3 +350,19 @@ vybírá tu starou, pak na commit nové tabulky zdržený exportem. Rozhodl až 
 dalších serverech se tabulka plní, `UPDATE_TIME` přitom stojí a po obnovení ve Workbenchi
 je čerstvý. Pozor tedy u každé hodnoty ze statistik `information_schema` na MySQL 8:
 bez tohoto nastavení je až den stará.
+
+### Etapa 11 – Připojení bez otevřené transakce
+**Účel:** Aby agent při dlouhém běhu na jednom připojení neviděl databázi ve stavu, v jakém byla při jeho prvním dotazu.
+**Řeší:** UC4-R8
+**Kroky:**
+1. Připojovat se v `Collector.connect()` s `autocommit=True`.
+2. Doplnit test parametrů připojení a test, že připojení běží v režimu autocommit.
+3. Napsat test proti testovací databázi, že `@@autocommit` připojení agenta je 1.
+4. Doplnit `NAVRH-zabbixvms.md` o snímek transakce v InnoDB a v `information_schema` MySQL 8.
+5. Zvýšit verzi balíčku na 0.2.3.
+6. Ručně ověřit na serveru s MySQL 8: po přepnutí tabulek surových dat a po smazání staré tabulky hlásí agent bez restartu služby správný počet tabulek i stáří zápisu.
+
+**Stav:** kroky 1 až 5 jsou hotové a testy prošly. Příčinu potvrdil server: služba na
+připojení otevřeném od svého startu hlásila u TG42 dvě tabulky surových dat, nové připojení
+vidělo jednu a po restartu služby hlásila jednu i ona. UC4-R8 zůstává Zbývá do kroku 6, tedy
+dokud verze 0.2.3 nepřečká přepnutí tabulek bez restartu.

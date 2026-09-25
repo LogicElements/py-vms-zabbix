@@ -103,3 +103,13 @@ agent dál ty staré. Stejně zastarale mohl chodit i počet řádků bufferů. 
 každém připojení nastaví `SET SESSION information_schema_stats_expiry = 0` (UC4-R7). Platí
 to jen pro jeho připojení, server se nemění. MySQL 5.7 tu proměnnou nezná a mezipaměť nemá,
 takže chybu neznámé proměnné agent přejde.
+
+Druhá past je transakce. `mysql-connector-python` má ve výchozím stavu vypnutý autocommit,
+takže první dotaz agenta by otevřel transakci, kterou agent nikdy neukončí, protože jen čte.
+InnoDB pak v úrovni REPEATABLE READ odpovídá na všechny další dotazy ze snímku pořízeného
+na jejím začátku. Na MySQL 8 to platí i pro `information_schema`, jehož tabulky jsou také
+InnoDB. Nová tabulka surových dat by pro agenta nevznikla a smazaná by nezmizela, dokud by se
+nepřipojil znovu. Na serveru to vypadalo takto: při přepnutí tabulek se hlásil čas zápisu
+staré tabulky a u jedné turbíny se počítaly dvě tabulky, přestože nové připojení vidělo
+jednu. Agent se proto připojuje s `autocommit=True` (UC4-R8). Na lokální MySQL 5.7 se to
+projevit nemohlo: `information_schema` tam transakční není a tabulky jsou MyISAM.
