@@ -26,6 +26,7 @@
 | 5 | Tray aplikace | [x] |
 | 6 | Logování a vlastní stav agenta | [x] |
 | 7 | Šablona pro Zabbix a návod | [x] |
+| 8 | Sledování surových dat | [ ] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -266,3 +267,36 @@ každém generování stejné a opakovaný import šablonu aktualizuje místo za
 Ověření: naimportovat `src/zabbixvms/data/zabbix_template.yaml` podle
 [návodu](NAVOD-zabbix.md) a zkontrolovat, že u hosta vzniklo dvanáct položek typu Zabbix
 trapper, value map u `vms.agent_status` a tři triggery.
+
+### Etapa 8 – Sledování surových dat
+**Účel:** Hlásit do Zabbixu, že se surová data VMS a TVMS přestala zapisovat nebo exportovat.
+**Řeší:** UC6-R1, UC6-R2, UC6-R3, UC6-R4
+**Kroky:**
+1. Přidat do `Turbine` pole `raw_prefixes` (výchozí prázdný seznam), v `Turbine.validate()` odmítnout prefix mimo `[A-Za-z0-9_]+` a v `Config.fill_missing()` doplnit prázdný seznam turbínám z konfigurace bez tohoto pole.
+2. Doplnit `"raw_prefixes": []` do `data/config_default.json`.
+3. Implementovat v `collector.py` přiřazení tabulky k prefixu podle celého názvu `<prefix>_yyyymmdd` nebo `<prefix>_yyyymmddHHMMSS` s platným datem.
+4. Implementovat dotaz na `TABLE_NAME` a `UPDATE_TIME` z `information_schema.TABLES` s escapovaným vzorem LIKE pro všechny prefixy turbíny jedním dotazem; turbína bez prefixů se neptá.
+5. Implementovat výpočet `vms.raw_tables` (největší počet tabulek jednoho prefixu) a `vms.raw_write_age` (největší stáří `UPDATE_TIME` nejnovější tabulky prefixu, bez tabulky nebo bez `UPDATE_TIME` jeden měsíc), u turbíny bez prefixů 0.
+6. Přidat obě metriky a oba triggery z PRS do katalogů v `metrics.py` a přegenerovat `data/zabbix_template.yaml`.
+7. Napsat testy konfigurace: výchozí prázdný seznam, uložení a načtení, načtení konfigurace bez pole, odmítnutí neplatného prefixu, pole ve výchozí konfiguraci.
+8. Napsat testy collectoru proti podvrženým objektům: přiřazení tabulek včetně prefixů, které jiným jen začínají, a neplatných dat, maximum počtu přes prefixy, stáří zápisu z nejnovější tabulky a nejhoršího prefixu, jeden měsíc bez tabulky a bez `UPDATE_TIME`, nuly a žádný dotaz bez prefixů, escapování vzoru a nastavená databáze.
+9. Napsat test proti testovací databázi: prefix, který v databázi není, vrátí prázdný seznam.
+10. Upravit test závislostí triggerů na klidu turbíny o `vms.raw_write_age`.
+11. Doplnit dokumentaci: `NAVRH-zabbixvms.md`, `NAVOD-zabbix.md` (nastavení prefixů, závislost na klidu), `CHYBY-agenta.md` a úvod `README.md`.
+12. Zvýšit verzi balíčku na 0.2.0.
+13. Ručně ověřit import šablony do Zabbixu: dvě nové položky, dva triggery a závislost triggeru na zápis na triggeru Turbína pod nominálními otáčkami.
+
+**Stav:** kroky 1 až 12 jsou hotové. Testy prošly včetně databázových proti lokální `BVMS`
+(MySQL 5.7.17), takže UC6-R1 až UC6-R4 jsou Hotovo. Zbývá krok 13, reimport šablony do
+Zabbixu; do té doby zůstává etapa nezaškrtnutá. Šablona přibrala jen nové položky a triggery,
+stávající objekty i jejich uuid se nezměnily.
+
+Proti skutečným tabulkám surových dat se agent ověřil na serveru s VMS i TVMS (turbíny TG11
+a TG12, každá s prefixem `btt_tgXY` a `tgXY_out`). Do Zabbixu tam chodí `vms.raw_tables` = 1
+a `vms.raw_write_age` = 1 s, tedy jedna tabulka na prefix a průběžný zápis.
+
+Co stojí za zapamatování: `python -m zabbixvms.template` zapisuje šablonu vedle toho balíčku,
+který Python importuje. Ve `.venv` s běžnou (ne editovatelnou) instalací je to kopie
+v `site-packages`, ne soubor v `src`, takže se přegenerovává s `PYTHONPATH=src`. Hlídá to test
+`test_the_file_in_the_package_is_what_the_generator_builds`, který selže, když zůstane
+soubor v `src` starý.

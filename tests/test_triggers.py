@@ -75,8 +75,8 @@ def test_triggers_on_a_value_show_it_in_their_name():
     for trigger in TRIGGERS:
         if trigger.condition.startswith("nodata("):
             assert "{ITEM.VALUE}" not in trigger.name
-        elif trigger.key.startswith("vms.buf") or trigger.key.endswith("_age") \
-                or trigger.key == "vms.agent_error":
+        elif trigger.key.startswith(("vms.buf", "vms.raw")) \
+                or trigger.key.endswith("_age") or trigger.key == "vms.agent_error":
             assert "{ITEM.VALUE}" in trigger.name, trigger.name
 
 
@@ -110,13 +110,30 @@ def test_every_dependency_names_a_trigger_of_the_catalog():
 
 
 def test_only_what_a_standing_turbine_stops_writing_waits_for_it():
-    """UC5-R4: a standing turbine stops filling the buffer, so the trigger on the age of
-    that write waits for it; the other sources are written whatever the turbine does."""
+    """UC5-R4, UC6-R4: a standing turbine stops filling the buffer and the raw data
+    tables, so the triggers on the age of those writes wait for it; the other sources
+    are written whatever the turbine does."""
     blocked = {trigger.key for trigger in TRIGGERS if trigger.blocked_by}
 
-    assert blocked == {"vms.buf_age"}
+    assert blocked == {"vms.buf_age", "vms.raw_write_age"}
     assert all(trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL
                for trigger in TRIGGERS if trigger.blocked_by)
+
+
+def test_three_raw_data_tables_of_one_prefix_are_a_failed_export():
+    """UC6-R3: one table is written, a second waits for its export; three is too many."""
+    trigger = next(trigger for trigger in TRIGGERS if trigger.key == "vms.raw_tables")
+
+    assert trigger.condition == "last({METRIC})>2"
+    assert not trigger.blocked_by
+
+
+def test_the_raw_data_write_waits_for_a_standing_turbine():
+    """UC6-R4: five minutes without a write, unless the turbine stands."""
+    trigger = next(trigger for trigger in TRIGGERS if trigger.key == "vms.raw_write_age")
+
+    assert trigger.condition == "last({METRIC})>5m"
+    assert trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL
 
 
 def test_nothing_blocks_the_trigger_that_blocks_the_others():

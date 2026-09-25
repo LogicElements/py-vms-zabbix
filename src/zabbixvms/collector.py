@@ -7,6 +7,8 @@ reordering the table does not change what is sent.
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import mysql.connector
@@ -34,6 +36,13 @@ MAX_AGE_SECONDS = int(MAX_AGE.total_seconds())
 
 # Metrics of a buffer the turbine does not have configured.
 NO_BUFFER = 0
+
+# Metrics of a turbine that has no raw data prefix configured.
+NO_RAW_DATA = 0
+
+# The date a raw data table carries at the end of its name, by its number of digits:
+# TVMS starts a table every day, VMS every few hours.
+RAW_DATE_FORMATS = {8: "%Y%m%d", 14: "%Y%m%d%H%M%S"}
 
 
 class CollectorError(Exception):
@@ -69,6 +78,59 @@ def age(moment: datetime | None, now: datetime) -> int:
         return MAX_AGE_SECONDS
     elapsed = int((now - moment).total_seconds())
     return max(0, min(elapsed, MAX_AGE_SECONDS))
+
+
+@dataclass(frozen=True)
+class RawTable:
+    """One raw data table: when its name says it was started and when it was last
+    written to, as information_schema knows it."""
+
+    name: str
+    created: datetime
+    updated: datetime | None
+
+
+def raw_table_created(prefix: str, name: str) -> datetime | None:
+    """Time in the name of a raw data table of that prefix, None for any other table.
+
+    The whole name has to fit, <prefix>_<date>: a prefix that merely starts another one,
+    btt_tg1 against btt_tg11_20260925120000, must not take its tables. Names are
+    matched regardless of case, the way MySQL on Windows compares them.
+    """
+    digits = "|".join(rf"\d{{{length}}}" for length in RAW_DATE_FORMATS)
+    match = re.fullmatch(rf"{re.escape(prefix)}_({digits})", name, re.IGNORECASE)
+    if match is None:
+        return None
+    stamp = match.group(1)
+    try:
+        return datetime.strptime(stamp, RAW_DATE_FORMATS[len(stamp)])
+    except ValueError:
+        return None
+
+
+def like_prefix(prefix: str) -> str:
+    """LIKE pattern of the tables starting with the prefix and an underscore.
+
+    An underscore is a wildcard to LIKE, so left alone it would let btt_tg1 match
+    btt_tg11_...; the pattern only narrows the query, raw_table_created() decides.
+    """
+    return prefix.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%") + "\\_%"
+
+
+def raw_values(raw_tables: dict[str, list[RawTable]], now: datetime) -> dict[str, int]:
+    """Raw data metrics of one turbine, summed up over its prefixes as the worst one.
+
+    Tables piling up under one prefix mean its export stopped, however few the other
+    prefixes have, so the count is the largest of them; the same goes for the write
+    age. Only the newest table of a prefix is written to, an older one waits for its
+    export, so the write age is taken from the newest.
+    """
+    count = write_age = NO_RAW_DATA
+    for tables in raw_tables.values():
+        count = max(count, len(tables))
+        newest = max(tables, key=lambda table: table.created, default=None)
+        write_age = max(write_age, age(newest.updated if newest else None, now))
+    return {"vms.raw_tables": count, "vms.raw_write_age": write_age}
 
 
 class Collector:
@@ -146,6 +208,36 @@ class Collector:
 
         return {row["TABLE_NAME"]: row["TABLE_ROWS"] or 0 for row in rows}
 
+    def read_raw_tables(self, turbine: Turbine) -> dict[str, list[RawTable]]:
+        """Raw data tables of the turbine, keyed by prefix.
+
+        Every configured prefix is a key, the ones without any table too: a prefix
+        with nothing in the database is what the metrics are there to report.
+        """
+        if not turbine.raw_prefixes:
+            return {}
+
+        conditions = " OR ".join(["TABLE_NAME LIKE %s"] * len(turbine.raw_prefixes))
+        query = ("SELECT TABLE_NAME, UPDATE_TIME FROM information_schema.TABLES "
+                 f"WHERE TABLE_SCHEMA = %s AND ({conditions})")
+        patterns = [like_prefix(prefix) for prefix in turbine.raw_prefixes]
+
+        cursor = self._cursor()
+        try:
+            cursor.execute(query, (self._database.database, *patterns))
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+
+        tables = {prefix: [] for prefix in turbine.raw_prefixes}
+        for row in rows:
+            for prefix in turbine.raw_prefixes:
+                created = raw_table_created(prefix, row["TABLE_NAME"])
+                if created is not None:
+                    tables[prefix].append(
+                        RawTable(row["TABLE_NAME"], created, row["UPDATE_TIME"]))
+        return tables
+
     def collect(self, turbine: Turbine, now: datetime | None = None) -> dict[str, float]:
         """Values of all collected metrics of one turbine, keyed by metric key."""
         if now is None:
@@ -160,12 +252,14 @@ class Collector:
                 self.warnings.append(
                     f"buffer table {table!r} of turbine {turbine.name!r} is not in "
                     f"database {self._database.database}")
-        return self.values(turbine, info, buffer_rows, now)
+        raw_tables = self.read_raw_tables(turbine)
+        return self.values(turbine, info, buffer_rows, raw_tables, now)
 
     @staticmethod
     def values(turbine: Turbine, info: dict, buffer_rows: dict[str, int],
-               now: datetime) -> dict[str, float]:
-        """Metric values computed from one info row and the buffer row counts.
+               raw_tables: dict[str, list[RawTable]], now: datetime) -> dict[str, float]:
+        """Metric values computed from one info row, the buffer row counts and the
+        raw data tables.
 
         Every value of one cycle is computed against the same measurement time.
         """
@@ -194,6 +288,8 @@ class Collector:
         values["vms.buf_rows"] = rows
         values["vms.buf_age"] = oldest
         values["vms.buf_bulk"] = bulk
+
+        values.update(raw_values(raw_tables, now))
 
         return values
 

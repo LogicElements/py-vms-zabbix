@@ -85,6 +85,23 @@ METRICS = (
         description="Součet doby zápisu bulk příkazů do databáze přes buffery turbíny",
     ),
     Metric(
+        key="vms.raw_tables",
+        name="Počet tabulek surových dat",
+        value_type=ValueType.UNSIGNED,
+        units="",
+        description="Největší počet tabulek surových dat se stejným prefixem "
+                    "přes prefixy turbíny",
+    ),
+    Metric(
+        key="vms.raw_write_age",
+        name="Stáří zápisu surových dat",
+        value_type=ValueType.UNSIGNED,
+        units="s",
+        description="Doba od posledního zápisu do nejnovější tabulky surových dat u toho "
+                    "prefixu turbíny, který je na tom nejhůř. "
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
+    ),
+    Metric(
         key="vms.agent_status",
         name="Stav agenta",
         value_type=ValueType.UNSIGNED,
@@ -137,9 +154,10 @@ class Trigger:
 # What the condition writes instead of the reference to the metric.
 METRIC_PLACEHOLDER = "{METRIC}"
 
-# What a standing turbine stops filling is the buffer, so the trigger on its age waits
-# for this one; the other sources are written whatever the turbine does. Any trigger
-# that should wait too only needs this name in its blocked_by.
+# What a standing turbine stops filling is the buffer and the raw data tables, so the
+# triggers on the age of those writes wait for this one; the other sources are written
+# whatever the turbine does. Any trigger that should wait too only needs this name in
+# its blocked_by.
 TURBINE_BELOW_NOMINAL = "Turbína pod nominálními otáčkami: {ITEM.VALUE}"
 
 # The triggers mirror the trigger table of the PRS. The key decides which item of the
@@ -178,6 +196,21 @@ TRIGGERS = (
     Trigger(
         name="Chyba ukládání do bufferu: {ITEM.VALUE}",
         key="vms.buf_age",
+        condition="last({METRIC})>5m",
+        priority="HIGH",
+        blocked_by=TURBINE_BELOW_NOMINAL,
+    ),
+    Trigger(
+        # One table is being written, a second one waits for its export for a moment
+        # after the switch; a third means an export did not happen.
+        name="Chyba exportu surových dat: {ITEM.VALUE}",
+        key="vms.raw_tables",
+        condition="last({METRIC})>2",
+        priority="HIGH",
+    ),
+    Trigger(
+        name="Chyba zápisu surových dat: {ITEM.VALUE}",
+        key="vms.raw_write_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
         blocked_by=TURBINE_BELOW_NOMINAL,

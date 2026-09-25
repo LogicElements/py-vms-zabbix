@@ -4,6 +4,7 @@ and the validation of the values the operator may set."""
 from __future__ import annotations
 
 import os
+import re
 from importlib import resources
 from pathlib import Path
 
@@ -18,6 +19,11 @@ DEFAULT_CONFIG_RESOURCE = "config_default.json"
 MIN_TURBINES = 1
 MAX_TURBINES = 4
 MAX_BUFFERS = 2
+
+# A raw data prefix ends up in a LIKE pattern, where % or a quote would quietly change
+# which tables the query finds; letters, digits and the underscore are all a table
+# name of VMS or TVMS needs.
+RAW_PREFIX = re.compile(r"[A-Za-z0-9_]+")
 
 # Seconds between the end of one measurement cycle and the start of the next.
 DEFAULT_PERIOD = 5
@@ -56,21 +62,32 @@ class DatabaseConfig:
 
 
 class Turbine:
-    """One monitored turbine: its name, its row in the info table and its buffers."""
+    """One monitored turbine: its name, its row in the info table, its buffers and the
+    prefixes of its raw data tables."""
 
     def __init__(self, name: str = "TEST", system_id: int = 10,
-                 buffers: list[str] | None = None) -> None:
+                 buffers: list[str] | None = None,
+                 raw_prefixes: list[str] | None = None) -> None:
         self.name = name
         self.system_id = system_id
         self.buffers = list(buffers) if buffers is not None else []
+        # Raw data tables of VMS and TVMS alike, named <prefix>_<date>, see UC6.
+        self.raw_prefixes = list(raw_prefixes) if raw_prefixes is not None else []
 
     def validate(self) -> None:
-        """Raise ConfigError when the turbine has more buffers than the agent supports."""
+        """Raise ConfigError when the turbine has more buffers than the agent supports
+        or a raw data prefix that is not a plain table name."""
         if len(self.buffers) > MAX_BUFFERS:
             raise ConfigError(
                 f"turbine {self.name!r} has {len(self.buffers)} buffers, "
                 f"at most {MAX_BUFFERS} are supported"
             )
+        for prefix in self.raw_prefixes:
+            if not isinstance(prefix, str) or not RAW_PREFIX.fullmatch(prefix):
+                raise ConfigError(
+                    f"turbine {self.name!r} has raw data prefix {prefix!r}, only "
+                    f"letters, digits and underscores are allowed"
+                )
 
 
 class Config:
@@ -109,6 +126,9 @@ class Config:
         """
         if not hasattr(self.zabbix, "period"):
             self.zabbix.period = DEFAULT_PERIOD
+        for turbine in self.turbines:
+            if not hasattr(turbine, "raw_prefixes"):
+                turbine.raw_prefixes = []
         return self
 
     @staticmethod

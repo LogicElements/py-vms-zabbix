@@ -1,5 +1,5 @@
 """Tests of the collector against the BVMS test database. They are skipped when
-no such database is reachable (UC4-R2, UC4-R3, UC4-R5)."""
+no such database is reachable (UC4-R2, UC4-R3, UC4-R5, UC6-R2)."""
 
 from datetime import datetime
 
@@ -114,6 +114,30 @@ def test_unknown_buffer_table_is_not_counted(collector):
     turbine = Turbine(name="TG", system_id=1, buffers=["buffer_that_is_not_there"])
 
     assert collector.read_buffer_rows(turbine) == {}
+
+
+def test_raw_data_prefix_without_tables_is_asked_for_and_empty(collector):
+    """UC6-R2: the query with its escaped LIKE runs against the real information_schema,
+    and a prefix nothing in the database carries has no table."""
+    turbine = Turbine(name="TG", system_id=1, raw_prefixes=["btt_that_is_not_there",
+                                                            "tvms_that_is_not_there"])
+
+    assert collector.read_raw_tables(turbine) == {"btt_that_is_not_there": [],
+                                                  "tvms_that_is_not_there": []}
+
+
+def test_tables_that_only_start_like_a_prefix_are_not_raw_data(collector, raw, database):
+    """UC6-R2: buffer_le_2 and buffer_le_3 start with buffer_le_, which LIKE lets
+    through, but without a date they are no raw data tables of it."""
+    started = query(raw, "SELECT TABLE_NAME FROM information_schema.TABLES "
+                         "WHERE TABLE_SCHEMA = %s AND TABLE_NAME LIKE 'buffer\\_le\\_%%'",
+                    (database.database,))
+    if not started:
+        pytest.skip("the test database needs a table named buffer_le_<something>")
+
+    turbine = Turbine(name="TG", system_id=1, raw_prefixes=["buffer_le"])
+
+    assert collector.read_raw_tables(turbine) == {"buffer_le": []}
 
 
 def test_collect_fills_the_catalog_from_the_database(collector, system_ids):

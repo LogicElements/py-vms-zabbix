@@ -1,7 +1,8 @@
 # Nastavení Zabbixu
 
 Návod k nasazení šablony agenta. Nejprve se naimportuje šablona, pak se založí hosté;
-kroky 1 a 3 se opakují pro každou turbínu z konfigurace.
+kroky 1 a 3 se opakují pro každou turbínu z konfigurace. Po aktualizaci agenta na novou verzi
+stačí šablonu naimportovat znovu, nové položky a triggery se tím doplní ke stávajícím.
 
 ## 1. Založit hosta
 
@@ -38,10 +39,11 @@ a jde vyplnit rovnou při zakládání hosta v kroku 1.
 turbína považuje za neběžící a trigger *Turbína pod nominálními otáčkami* přejde do
 problémového stavu.
 
-Ten trigger sám o sobě nic nehlásí jako poruchu – jeho smyslem je **umlčet trigger nad
-stářím zápisu do bufferu** (`vms.buf_age`). Stojící turbína do bufferu nic neukládá, takže
-by jinak jeho stářím poplašila dohled pokaždé, když se zastaví. Trigger na něm má závislost,
-takže se po dobu jeho aktivity neuplatní.
+Ten trigger sám o sobě nic nehlásí jako poruchu – jeho smyslem je **umlčet triggery nad
+stářím zápisu do bufferu** (`vms.buf_age`) **a do tabulek surových dat**
+(`vms.raw_write_age`). Stojící turbína do nich nic neukládá, takže by jinak jejich stářím
+poplašila dohled pokaždé, když se zastaví. Oba triggery na něm mají závislost, takže se po
+dobu jeho aktivity neuplatní.
 
 Jakmile zapnete odesílání e-mailů podle kapitoly 5, má to ale jeden důsledek: priorita
 Average dostane tenhle trigger nad prahovou hodnotu, takže při každém zastavení turbíny
@@ -49,8 +51,9 @@ přijde mail. Je to záměr, ne chyba nastavení; když to u některé turbíny 
 z rozesílání vyjmout podle 5.4.
 
 Ostatní triggery hlásí bez ohledu na otáčky: databáze VMS setupu i oba sockety se plní
-i za klidu a přeplněný buffer je problém taky. Kdyby se ukázalo, že další trigger má za
-klidu mlčet, přidá se mu stejná závislost.
+i za klidu, přeplněný buffer je problém taky a tabulky surových dat se za klidu nehromadí,
+protože nové nevznikají. Kdyby se ukázalo, že další trigger má za klidu mlčet, přidá se mu
+stejná závislost.
 
 Turbína s jinými nominálními otáčkami nepotřebuje vlastní šablonu, stačí makro přepsat
 u hosta: v nastavení hosta záložka **Macros → Inherited and host macros**, u
@@ -124,3 +127,32 @@ pozastavené.
 
 Pro jednoho dva hosty jde do akce dát rovnou podmínku, že host není `LE_TEST`. Je to
 nejrychlejší cesta, ale při každém dalším hostu se akce musí znovu upravit.
+
+## 6. Surová data VMS a TVMS
+
+Tabulky surových dat se v Zabbixu nenastavují, šablona na ně má položky i triggery hotové.
+Které tabulky patří ke které turbíně, se nastavuje v konfiguraci agenta: turbína má seznam
+`raw_prefixes` a v něm prefixy tabulek surových dat VMS i TVMS, které k ní patří. Tabulka
+patří k prefixu, když se jmenuje `<prefix>_<datum>`, u VMS s datem `yyyymmddHHMMSS`, u TVMS
+`yyyymmdd`.
+
+| Turbína | `raw_prefixes` |
+| --- | --- |
+| EDU TG11 | `["btt_tg11", "tg11_out"]` |
+| EDU TG31 | `["btt_tg31", "tvms_tg31"]` |
+| ETE TG1 | `["btt_tg1"]` |
+| ETE TG2 | `["btt_tg2a", "btt_tg2b", "btt_tg2c"]` |
+
+Turbína bez surových dat má seznam prázdný a hlásí u obou metrik nulu. Změna seznamu se
+projeví po restartu služby.
+
+Šablona k tomu hlásí dvě chyby:
+
+- *Chyba exportu surových dat*, když má jeden prefix v databázi 3 a více tabulek: vzniká nová
+  tabulka, ale ty staré se neexportují a nemažou.
+- *Chyba zápisu surových dat*, když se do nejnovější tabulky některého prefixu 5 minut nic
+  nezapsalo. Za klidu turbíny mlčí, viz kapitola 4.
+
+Překlep v prefixu vypadá stejně jako software, který vůbec neběží: prefix nemá žádnou tabulku
+a stáří zápisu se hlásí jako jeden měsíc. Když chyba zápisu přijde hned po nasazení, porovnejte
+nejdřív prefixy s názvy tabulek v databázi.

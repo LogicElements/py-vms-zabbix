@@ -96,6 +96,33 @@ zabbix_export:
       value_type: UNSIGNED
       description: Součet doby zápisu bulk příkazů do databáze přes buffery turbíny
       units: ms
+    - uuid: 3b328c5641a542f283a3494237d0cd66
+      name: Počet tabulek surových dat
+      type: TRAP
+      key: vms.raw_tables
+      value_type: UNSIGNED
+      description: Největší počet tabulek surových dat se stejným prefixem přes prefixy turbíny
+      triggers:
+      - uuid: 277a698c78f84841a4738313403b3af0
+        expression: last(/VMS zabbix agent/vms.raw_tables)>2
+        name: 'Chyba exportu surových dat: {ITEM.VALUE}'
+        priority: HIGH
+    - uuid: e790bd5704644b8cbd0e5622ca9235d3
+      name: Stáří zápisu surových dat
+      type: TRAP
+      key: vms.raw_write_age
+      value_type: UNSIGNED
+      description: Doba od posledního zápisu do nejnovější tabulky surových dat u toho prefixu turbíny,
+        který je na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.
+      units: s
+      triggers:
+      - uuid: 87e110eb139e489385877d2e0bb737c2
+        expression: last(/VMS zabbix agent/vms.raw_write_age)>5m
+        name: 'Chyba zápisu surových dat: {ITEM.VALUE}'
+        priority: HIGH
+        dependencies:
+        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     - uuid: aceaa39a77be47c5acfe687fdc0cfdef
       name: Stav agenta
       type: TRAP

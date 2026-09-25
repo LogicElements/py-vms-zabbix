@@ -1,7 +1,8 @@
 """Tests of the collector against faked database objects: the computations of the
-source table, the -1 limit and the zeros of an unconfigured buffer
-(UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC3-R3)."""
+source table, the -1 limit, the zeros of an unconfigured buffer and the raw data tables
+(UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC3-R3, UC6-R2, UC6-R3, UC6-R4)."""
 
+import re
 from datetime import datetime, timedelta
 
 import pytest
@@ -15,11 +16,40 @@ from zabbixvms.collector import (
     Collector,
     CollectorError,
     age,
+    like_prefix,
+    raw_table_created,
     speed,
 )
 from zabbixvms.config import DatabaseConfig, Turbine
 
 NOW = datetime(2026, 9, 14, 12, 0, 0)
+
+
+def vms_table(prefix, created):
+    """Name of a VMS raw data table, which carries the time it was started."""
+    return f"{prefix}_{created:%Y%m%d%H%M%S}"
+
+
+def tvms_table(prefix, day):
+    """Name of a TVMS raw data table, which carries only its day."""
+    return f"{prefix}_{day:%Y%m%d}"
+
+
+def like_regex(pattern):
+    """The LIKE pattern as a regex, the way MySQL reads it: a backslash escapes, _ is
+    one character, % any run of them, and case does not matter."""
+    parts = []
+    chars = iter(pattern)
+    for char in chars:
+        if char == "\\":
+            parts.append(re.escape(next(chars)))
+        elif char == "_":
+            parts.append(".")
+        elif char == "%":
+            parts.append(".*")
+        else:
+            parts.append(re.escape(char))
+    return re.compile("".join(parts), re.IGNORECASE | re.DOTALL)
 
 
 def info_row(**overrides):
@@ -39,7 +69,7 @@ def info_row(**overrides):
 
 
 class FakeCursor:
-    """Cursor that answers the two queries of the collector from prepared rows."""
+    """Cursor that answers the three queries of the collector from prepared rows."""
 
     def __init__(self, fake):
         self._fake = fake
@@ -47,7 +77,14 @@ class FakeCursor:
 
     def execute(self, query, params=None):
         self._fake.executed.append((query, params))
-        if "information_schema" in query:
+        if " LIKE " in query:
+            patterns = [like_regex(pattern) for pattern in params[1:]]
+            self._rows = [
+                {"TABLE_NAME": name, "UPDATE_TIME": updated}
+                for name, updated in self._fake.raw_tables.items()
+                if any(pattern.fullmatch(name) for pattern in patterns)
+            ]
+        elif "information_schema" in query:
             self._rows = [
                 {"TABLE_NAME": name, "TABLE_ROWS": rows}
                 for name, rows in self._fake.table_rows.items()
@@ -66,9 +103,11 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, info_rows=(), table_rows=None):
+    def __init__(self, info_rows=(), table_rows=None, raw_tables=None):
         self.info_rows = list(info_rows)
         self.table_rows = dict(table_rows or {})
+        # Raw data tables by name, each with its UPDATE_TIME.
+        self.raw_tables = dict(raw_tables or {})
         self.executed = []
         self.closed_cursors = 0
         self.closed = False
@@ -359,6 +398,185 @@ def test_turbine_without_buffers_asks_no_table_query():
     make_collector(connection).collect(turbine, NOW)
 
     assert len(connection.executed) == 1
+
+
+@pytest.mark.parametrize("prefix, name, created", [
+    ("btt_tg11", "btt_tg11_20260925120000", datetime(2026, 9, 25, 12, 0, 0)),
+    ("btt_tg2a", "btt_tg2a_20260925081530", datetime(2026, 9, 25, 8, 15, 30)),
+    ("tg11_out", "tg11_out_20260925", datetime(2026, 9, 25)),
+    ("tvms_tg31", "tvms_tg31_20260925", datetime(2026, 9, 25)),
+    # MySQL on Windows keeps the names in lower case and compares them without it.
+    ("btt_tg1", "BTT_TG1_20260925120000", datetime(2026, 9, 25, 12, 0, 0)),
+])
+def test_a_raw_data_table_carries_its_date_in_the_name(prefix, name, created):
+    """UC6-R2: VMS names its tables down to the second, TVMS by the day."""
+    assert raw_table_created(prefix, name) == created
+
+
+@pytest.mark.parametrize("prefix, name", [
+    # A prefix that merely starts another one.
+    ("btt_tg1", "btt_tg11_20260925120000"),
+    ("btt_tg2", "btt_tg2a_20260925120000"),
+    ("tvms_tg3", "tvms_tg31_20260925"),
+    ("tg11", "tg11_out_20260925"),
+    # Something that is not the date of a raw data table.
+    ("btt_tg1", "btt_tg1"),
+    ("btt_tg1", "btt_tg1_2026092512"),
+    ("btt_tg1", "btt_tg1_20260925120000_old"),
+    ("btt_tg1", "btt_tg1x20260925120000"),
+    ("btt_tg1", "btt_tg1_20261340120000"),
+    ("tg11_out", "tg11_out_20260231"),
+])
+def test_a_table_the_name_does_not_fit_is_not_a_raw_data_table(prefix, name):
+    """UC6-R2: only the whole name <prefix>_<date> with a valid date belongs."""
+    assert raw_table_created(prefix, name) is None
+
+
+def test_the_like_pattern_takes_underscores_literally():
+    """UC6-R2: an underscore left alone would let btt_tg1 match btt_tg11_..."""
+    assert like_prefix("tg11_out") == r"tg11\_out\_%"
+    assert like_regex(like_prefix("btt_tg1")).fullmatch("btt_tg1_20260925120000")
+    assert not like_regex(like_prefix("btt_tg1")).fullmatch("btt_tg11_20260925120000")
+
+
+def raw_turbine(*prefixes):
+    return Turbine(name="TG1", system_id=11, buffers=[], raw_prefixes=list(prefixes))
+
+
+def collect_raw(turbine, raw_tables, database="BVMS"):
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)], raw_tables=raw_tables)
+    collector = make_collector(connection, database=database)
+    return collector.collect(turbine, NOW), connection, collector
+
+
+def test_raw_data_values_follow_the_source_table():
+    """UC6-R3, UC6-R4: the tables of the prefix are counted and the newest one's write
+    is the age."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {
+        vms_table("btt_tg1", NOW - timedelta(hours=1)): NOW - timedelta(seconds=10),
+        vms_table("btt_tg1", NOW - timedelta(hours=5)): NOW - timedelta(hours=1),
+    })
+
+    assert values["vms.raw_tables"] == 2
+    assert values["vms.raw_write_age"] == 10
+
+
+def test_a_write_into_an_older_table_does_not_count():
+    """UC6-R4: only the newest table is written to, an older one waits for its export;
+    which one is the newest says its name, not its write."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {
+        vms_table("btt_tg1", NOW - timedelta(hours=1)): NOW - timedelta(seconds=600),
+        vms_table("btt_tg1", NOW - timedelta(hours=5)): NOW - timedelta(seconds=1),
+    })
+
+    assert values["vms.raw_write_age"] == 600
+
+
+def test_the_count_is_that_of_the_prefix_with_the_most_tables():
+    """UC6-R3: tables piling up under one prefix are a failed export, however few the
+    other prefixes have."""
+    written = NOW - timedelta(seconds=5)
+    tables = {vms_table("btt_tg2a", NOW - timedelta(hours=1)): written,
+              vms_table("btt_tg2c", NOW - timedelta(hours=1)): written}
+    for hours in (1, 5, 9):
+        tables[vms_table("btt_tg2b", NOW - timedelta(hours=hours))] = written
+
+    values, _, _ = collect_raw(raw_turbine("btt_tg2a", "btt_tg2b", "btt_tg2c"), tables)
+
+    assert values["vms.raw_tables"] == 3
+
+
+def test_the_write_age_is_that_of_the_worst_prefix():
+    """UC6-R4: one prefix that stopped writing is enough, the others do not hide it."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg2a", "btt_tg2b"), {
+        vms_table("btt_tg2a", NOW - timedelta(hours=1)): NOW - timedelta(seconds=5),
+        vms_table("btt_tg2b", NOW - timedelta(hours=1)): NOW - timedelta(seconds=400),
+    })
+
+    assert values["vms.raw_write_age"] == 400
+
+
+def test_vms_and_tvms_of_one_turbine_are_summed_up_together():
+    """UC6-R1, UC6-R3, UC6-R4: a turbine with both systems reports the worse of them."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg11", "tg11_out"), {
+        vms_table("btt_tg11", NOW - timedelta(hours=1)): NOW - timedelta(seconds=3),
+        vms_table("btt_tg11", NOW - timedelta(hours=5)): NOW - timedelta(hours=1),
+        tvms_table("tg11_out", NOW): NOW - timedelta(seconds=700),
+    })
+
+    assert values["vms.raw_tables"] == 2
+    assert values["vms.raw_write_age"] == 700
+
+
+def test_the_newest_tvms_table_is_the_one_of_the_latest_day():
+    """UC6-R2: TVMS tables are told apart by their day."""
+    values, _, _ = collect_raw(raw_turbine("tvms_tg31"), {
+        tvms_table("tvms_tg31", NOW): NOW - timedelta(seconds=20),
+        tvms_table("tvms_tg31", NOW - timedelta(days=1)): NOW - timedelta(seconds=1),
+    })
+
+    assert values["vms.raw_write_age"] == 20
+
+
+def test_a_prefix_without_a_table_is_as_old_as_it_gets():
+    """UC6-R3, UC6-R4: no table means nothing is written, but it adds no table."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg1", "tg11_out"), {
+        vms_table("btt_tg1", NOW - timedelta(hours=1)): NOW - timedelta(seconds=10),
+    })
+
+    assert values["vms.raw_tables"] == 1
+    assert values["vms.raw_write_age"] == MAX_AGE_SECONDS
+
+
+def test_a_table_without_an_update_time_is_as_old_as_it_gets():
+    """UC6-R4: InnoDB forgets it on a restart of MySQL, until the next write."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {
+        vms_table("btt_tg1", NOW - timedelta(hours=1)): None,
+    })
+
+    assert values["vms.raw_write_age"] == MAX_AGE_SECONDS
+
+
+def test_a_table_the_pattern_lets_through_but_the_name_does_not_fit_is_left_out():
+    """UC6-R2: LIKE only narrows the query, the name decides."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {
+        vms_table("btt_tg1", NOW - timedelta(hours=1)): NOW - timedelta(seconds=10),
+        "btt_tg1_export": NOW - timedelta(seconds=1),
+        "btt_tg1_20261340120000": NOW - timedelta(seconds=1),
+        vms_table("btt_tg11", NOW - timedelta(hours=1)): NOW - timedelta(seconds=1),
+    })
+
+    assert values["vms.raw_tables"] == 1
+    assert values["vms.raw_write_age"] == 10
+
+
+def test_turbine_without_raw_data_prefixes_reports_zero():
+    """UC6-R1: both raw data metrics are still sent, as zeros, and nothing is asked."""
+    values, connection, _ = collect_raw(raw_turbine(), {
+        vms_table("btt_tg1", NOW - timedelta(hours=1)): NOW,
+    })
+
+    assert values["vms.raw_tables"] == 0
+    assert values["vms.raw_write_age"] == 0
+    assert not [query for query, _ in connection.executed if " LIKE " in query]
+
+
+def test_raw_data_tables_are_asked_for_in_the_configured_database():
+    """UC6-R2: one query over information_schema for all prefixes of the turbine."""
+    _, connection, _ = collect_raw(raw_turbine("btt_tg11", "tg11_out"), {},
+                                   database="BVMS2")
+
+    query, params = connection.executed[-1]
+    assert "information_schema.TABLES" in query
+    assert "UPDATE_TIME" in query
+    assert params == ("BVMS2", r"btt\_tg11\_%", r"tg11\_out\_%")
+
+
+def test_a_missing_raw_data_table_is_no_warning():
+    """What a prefix without tables means is what the trigger reports, not the agent."""
+    _, _, collector = collect_raw(raw_turbine("btt_tg1"), {})
+
+    assert collector.warnings == []
 
 
 def test_missing_info_row_is_an_error():

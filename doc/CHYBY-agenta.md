@@ -64,6 +64,7 @@ metriku odeslat nemůže:
 
 - `configuration has 5 turbines, 1 to 4 are supported`
 - `turbine 'TEST' has 3 buffers, at most 2 are supported`
+- `turbine 'TEST' has raw data prefix 'btt-tg1', only letters, digits and underscores are allowed`
 - `cannot read configuration ...` u poškozeného souboru
 
 Tyhle chyby najdete v logu a v Event Logu. V Zabbixu se projeví jen nepřímo, triggerem
@@ -88,13 +89,21 @@ v něm neprojeví vůbec, což je záměr.
 
 ### Stojící turbína není chyba
 
-Trigger nad stářím zápisu do bufferu (`vms.buf_age`) mlčí, dokud jsou otáčky pod mezí
-makra `{$VMS.SPEED.NOMINAL}`. Stojící turbína do bufferu nic neukládá, takže rostoucí stáří
-je v takové chvíli očekávané. Ostatní triggery podmíněné nejsou – zbylé zdroje se plní bez
-ohledu na otáčky. Řeší to
+Triggery nad stářím zápisu do bufferu (`vms.buf_age`) a do tabulek surových dat
+(`vms.raw_write_age`) mlčí, dokud jsou otáčky pod mezí makra `{$VMS.SPEED.NOMINAL}`. Stojící
+turbína do nich nic neukládá, takže rostoucí stáří je v takové chvíli očekávané. Ostatní
+triggery podmíněné nejsou – zbylé zdroje se plní bez ohledu na otáčky. Řeší to
 závislost na triggeru *Turbína pod nominálními otáčkami*, viz
 [návod na Zabbix](NAVOD-zabbix.md). Agent sám v tom nehraje roli – posílá metriky stejně
 jako jindy, rozhoduje se až v Zabbixu.
+
+### Chybějící tabulka surových dat není chyba agenta
+
+Když k prefixu z `raw_prefixes` v databázi žádná tabulka není, agent to nehlásí jako
+varování. Je to totiž přesně ta porucha, kterou mají metriky surových dat ukázat: stáří zápisu
+se hlásí jako jeden měsíc a v Zabbixu se ozve *Chyba zápisu surových dat*. Stejně se ale
+projeví i překlep v prefixu – u chyby hned po nasazení proto nejdřív porovnejte prefixy
+v konfiguraci s názvy tabulek v databázi.
 
 ### Pád procesu na nativní úrovni
 

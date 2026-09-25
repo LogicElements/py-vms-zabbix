@@ -34,6 +34,10 @@
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
 | UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Hotovo | tests/test_template.py |
+| UC6-R1 | Seznam prefixů tabulek surových dat v konfiguraci turbíny | Hotovo | tests/test_config.py |
+| UC6-R2 | Tabulka patří k prefixu podle celého názvu `<prefix>_<datum>` | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
+| UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
+| UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 
 ## Účel projektu
 
@@ -205,6 +209,8 @@ Sada metrik odesílaných do Zabbixu:
 | `vms.buf_rows` | Počet řádků v bufferech | Numeric (unsigned) | | Součet počtu řádků přes bufferové tabulky turbíny |
 | `vms.buf_age` | Stáří bufferů | Numeric (unsigned) | s | Doba od posledních dat přijatých do toho bufferu turbíny, který je na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
 | `vms.buf_bulk` | Doba bulk zápisu | Numeric (unsigned) | ms | Součet doby zápisu bulk příkazů do databáze přes buffery turbíny |
+| `vms.raw_tables` | Počet tabulek surových dat | Numeric (unsigned) | | Největší počet tabulek surových dat se stejným prefixem přes prefixy turbíny |
+| `vms.raw_write_age` | Stáří zápisu surových dat | Numeric (unsigned) | s | Doba od posledního zápisu do nejnovější tabulky surových dat u toho prefixu turbíny, který je na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
 | `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`. |
 | `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku. |
 
@@ -247,8 +253,8 @@ Sada metrik odesílaných do Zabbixu:
 
 Aktérem je agent. Cílem je naplnit sadu metrik z UC3 hodnotami z databáze `BVMS`. Spouštěčem je
 každý cyklus měření. Agent pro každou turbínu z konfigurace přečte její řádek z informační
-tabulky a metadata jejích bufferových tabulek, z nich spočítá hodnoty metrik a odešle je do
-Zabbixu. Zdroj každé metriky určuje tabulka níže.
+tabulky a metadata jejích bufferových tabulek a tabulek surových dat (UC6), z nich spočítá
+hodnoty metrik a odešle je do Zabbixu. Zdroj každé metriky určuje tabulka níže.
 
 | Klíč metriky | Zdroj | Vstup | Pole zdroje | Výpočet |
 | --- | --- | --- | --- | --- |
@@ -259,6 +265,8 @@ Zabbixu. Zdroj každé metriky určuje tabulka níže.
 | `vms.buf_age` | řádek `info` turbíny | `info`, `system_id` | `Date_Buffer_1`, `Date_Buffer_2` | větší ze stáří obou sloupců, přes nastavené buffery |
 | `vms.buf_bulk` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_1`, `Time_bulk_2` | součet hodnot přes nastavené buffery |
 | `vms.buf_rows` | `information_schema.TABLES` | `database`, bufferové tabulky turbíny | `TABLE_ROWS` | součet hodnot přes nastavené buffery |
+| `vms.raw_tables` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME` | počet tabulek každého prefixu (UC6-R2), největší z nich |
+| `vms.raw_write_age` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME`, `UPDATE_TIME` | stáří `UPDATE_TIME` nejnovější tabulky každého prefixu, největší z nich |
 | `vms.agent_status` | vlastní stav agenta | – | – | 0, 1 nebo 2 podle průběhu cyklu |
 | `vms.agent_error` | vlastní stav agenta | – | – | text poslední chyby, jinak prázdný řetězec |
 
@@ -350,6 +358,8 @@ Sada triggerů, které šablona obsahuje:
 | Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | – |
 | Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH | – |
 | Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba exportu surových dat: {ITEM.VALUE} | `vms.raw_tables` | `last({METRIC})>2` | HIGH | – |
+| Chyba zápisu surových dat: {ITEM.VALUE} | `vms.raw_write_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | WARNING | – |
 | Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH | – |
 | Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE | – |
@@ -358,11 +368,12 @@ Sada triggerů, které šablona obsahuje:
 Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
 
 Sloupec **Závisí na** znamená závislost triggerů v Zabbixu: dokud je uvedený trigger
-v problémovém stavu, závislý trigger se neuplatní. Zatím ho má vyplněný jediný trigger,
-nad `vms.buf_age`: stojící turbína do bufferu nic neukládá, takže rostoucí stáří zápisu
-je v takové chvíli očekávané, ne chyba. Ostatní zdroje běží bez ohledu na otáčky a jejich
-triggery hlásí pořád. Přibýt může kterýkoli další – stačí do sloupce doplnit jméno
-blokujícího triggeru.
+v problémovém stavu, závislý trigger se neuplatní. Zatím ho mají vyplněný dva triggery,
+nad `vms.buf_age` a nad `vms.raw_write_age`: stojící turbína do bufferu nic neukládá a
+nezapisuje ani surová data, takže rostoucí stáří zápisu je v takové chvíli očekávané, ne
+chyba. Ostatní zdroje běží bez ohledu na otáčky a jejich triggery hlásí pořád; počet tabulek
+surových dat při klidu neroste, protože nové tabulky nevznikají. Přibýt může kterýkoli další
+– stačí do sloupce doplnit jméno blokujícího triggeru.
 
 Mez otáček nese makro šablony:
 
@@ -383,3 +394,59 @@ Makro jde přepsat na hostu, takže turbína s jinými nominálními otáčkami 
 - Šablona obsahuje makra z tabulky maker i s výchozími hodnotami a každé makro použité v podmínce triggeru je v ní deklarované.
 - Každý trigger se odkazuje na klíč metriky, který je v tabulce metrik v UC3.
 - Tabulka obsahuje trigger na stav agenta, trigger na neprázdný `vms.agent_error` s textem chyby ve jméně a trigger na to, že na host nedorazila žádná hodnota po dobu 5 minut; ten pokrývá i případ, kdy agent neběží nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.
+
+## UC6 – Sledování ukládání surových dat VMS a TVMS
+
+Aktérem je ten, kdo dohlíží na přenos surových dat. Cílem je poznat, že se surová data
+přestala ukládat nebo předávat k nám. Spouštěčem je každý cyklus měření.
+
+Surová data ukládají do databáze `BVMS` dva systémy, VMS a TVMS, a oba stejně: založí tabulku
+`<prefix>_<datum>` a zapisují do ní. Po uplynutí periody založí novou, tu předchozí vyexportují
+do textového souboru, smažou ji z databáze, export zabalí do zipu a přenesou k nám. Oba se
+liší jen periodou a tvarem data v názvu:
+
+| Systém | Perioda | Datum v názvu | Prefixy |
+| --- | --- | --- | --- |
+| VMS | nastavitelná, teď 4 h | `yyyymmddHHMMSS` | `btt_tg11` (EDU TG11), `btt_tg1` (ETE TG1), `btt_tg2a`, `btt_tg2b`, `btt_tg2c` (ETE TG2) |
+| TVMS | 24 h | `yyyymmdd` | `tg11_out`, `tg12_out` (RB1), `tvms_tgXY` (RB2 až RB4) |
+
+Jedna turbína může mít prefixy obou systémů a hlásí se pod svým hostem. Agent sleduje dvě
+věci: kolik tabulek jednoho prefixu v databázi je, protože hromadící se tabulky znamenají,
+že neběží export, a jak dlouho se do nejnovější tabulky nezapsalo. Za klidu turbíny se surová
+data nezapisují a u VMS nevznikají ani nové tabulky.
+
+Stáří nejnovější tabulky ani existence tabulky pro dnešní den se nesledují. Agent proto
+nepozná, že přestaly vznikat nové tabulky, když se do poslední dál zapisuje, a za klidu
+turbíny nepozná výpadek TVMS.
+
+### UC6-R1
+**Popis:** Každá turbína má v konfiguraci seznam prefixů tabulek surových dat.
+**DoD:**
+- U každé turbíny se nastaví seznam prefixů, ve kterém mohou být prefixy VMS i TVMS zároveň.
+- Prázdný seznam je platná konfigurace; turbína bez prefixu hlásí u obou metrik surových dat 0.
+- Prefix obsahuje jen písmena bez diakritiky, číslice a podtržítko; konfiguraci s jiným prefixem agent odmítne jako neplatnou.
+- Konfigurace zapsaná starší verzí agenta, která seznam prefixů nemá, zůstává platná a její turbíny mají seznam prázdný.
+
+### UC6-R2
+**Popis:** Tabulka surových dat patří k prefixu podle celého svého názvu.
+**DoD:**
+- K prefixu patří tabulka, jejíž název je prefix, podtržítko a datum ve tvaru `yyyymmdd` nebo `yyyymmddHHMMSS`, a nic víc.
+- Tabulka, jejíž datum není platné datum nebo čas, k prefixu nepatří.
+- Tabulka jiného prefixu, který daným prefixem jen začíná, k němu nepatří: `btt_tg11_20260925120000` nepatří k `btt_tg1` a `btt_tg2a_20260925120000` nepatří k `btt_tg2`.
+- Tabulky se hledají v databázi z konfigurace.
+- Nejnovější tabulkou prefixu je ta s nejnovějším datem v názvu; datum se čte v místním čase serveru.
+
+### UC6-R3
+**Popis:** Počet tabulek surových dat je největší počet tabulek jednoho prefixu přes prefixy turbíny.
+**DoD:**
+- Pro každý prefix turbíny se spočítají tabulky, které k němu patří; `vms.raw_tables` je největší z těchto počtů.
+- Prefix bez tabulek do počtu přispívá nulou.
+- Šablona obsahuje trigger, který hlásí chybu exportu, když má jeden prefix 3 a více tabulek.
+
+### UC6-R4
+**Popis:** Stáří zápisu surových dat je stáří posledního zápisu do nejnovější tabulky u toho prefixu turbíny, který je na tom nejhůř.
+**DoD:**
+- Pro každý prefix se stáří zápisu počítá z `UPDATE_TIME` jeho nejnovější tabulky podle UC4-R4; `vms.raw_write_age` je největší z nich.
+- Zápis do starší tabulky prefixu stáří zápisu nesnižuje.
+- Prefix bez tabulky i tabulka bez `UPDATE_TIME` se hlásí jako jeden měsíc.
+- Šablona obsahuje trigger, který hlásí chybu zápisu, když stáří zápisu přesáhne 5 minut, a je závislý na triggeru Turbína pod nominálními otáčkami.

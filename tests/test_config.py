@@ -1,5 +1,5 @@
 """Tests of the configuration: round trip, its place in ProgramData and the
-accepted ranges (UC2-R1, UC2-R3, UC2-R4, UC2-R5, UC2-R6, UC2-R7)."""
+accepted ranges (UC2-R1, UC2-R3, UC2-R4, UC2-R5, UC2-R6, UC2-R7, UC6-R1)."""
 
 from pathlib import Path
 
@@ -240,4 +240,71 @@ def test_a_configuration_written_before_the_period_existed_still_loads(tmp_path)
     loaded = Config.load(path)
 
     assert loaded.zabbix.period == DEFAULT_PERIOD
+    loaded.validate()
+
+
+def test_a_turbine_has_no_raw_data_prefix_unless_told():
+    """UC6-R1: an empty list is a valid configuration."""
+    config = Config(turbines=[Turbine()])
+
+    assert config.turbines[0].raw_prefixes == []
+    config.validate()
+
+
+def test_raw_data_prefixes_survive_a_round_trip(tmp_path):
+    """UC6-R1: the prefixes of VMS and TVMS are stored and read back like the rest."""
+    path = tmp_path / "config.json"
+    Config(turbines=[Turbine(raw_prefixes=["btt_tg11", "tg11_out"])]).store(path)
+
+    assert Config.load(path).turbines[0].raw_prefixes == ["btt_tg11", "tg11_out"]
+
+
+def test_turbines_do_not_share_raw_data_prefixes():
+    """UC2-R3: values of one turbine do not reach the other turbines."""
+    first = Turbine(name="TG1", system_id=11)
+    second = Turbine(name="TG2", system_id=12)
+
+    first.raw_prefixes.append("btt_tg1")
+
+    assert second.raw_prefixes == []
+
+
+@pytest.mark.parametrize("prefix", ["btt_tg11", "tg11_out", "tvms_tg31", "BTT_TG2A"])
+def test_a_raw_data_prefix_of_a_table_name_is_accepted(prefix):
+    """UC6-R1: letters, digits and underscores are what the table names are made of."""
+    Config(turbines=[Turbine(raw_prefixes=[prefix])]).validate()
+
+
+@pytest.mark.parametrize("prefix", ["btt-tg11", "btt_%", "btt tg1", "btt_tg1'", "",
+                                    "btt_tgč", 11])
+def test_a_raw_data_prefix_that_is_not_a_table_name_is_rejected(prefix):
+    """UC6-R1: anything else would change what the LIKE pattern of the query finds."""
+    with pytest.raises(ConfigError, match="raw data prefix"):
+        Config(turbines=[Turbine(raw_prefixes=["btt_tg1", prefix])]).validate()
+
+
+def test_the_packaged_default_carries_the_raw_data_prefixes():
+    """UC6-R1: the operator sees the field in the file that is deployed."""
+    import json
+
+    stored = json.loads(config_module.default_config_bytes())
+
+    assert all(turbine["raw_prefixes"] == [] for turbine in stored["turbines"])
+
+
+def test_a_configuration_written_before_the_raw_data_prefixes_existed_still_loads(tmp_path):
+    """UC6-R1: a file of an older agent has no prefixes, its turbines get none."""
+    import json
+
+    path = tmp_path / "config.json"
+    make_config().store(path)
+
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    for turbine in stored["turbines"]:
+        del turbine["raw_prefixes"]
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+    loaded = Config.load(path)
+
+    assert [turbine.raw_prefixes for turbine in loaded.turbines] == [[], []]
     loaded.validate()
