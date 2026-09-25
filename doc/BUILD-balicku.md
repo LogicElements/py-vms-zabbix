@@ -44,7 +44,7 @@ Součástí sady jsou i testy proti prostředí, které jdou vynechat:
 Verze balíčku je na jediném místě, v `src/zabbixvms/__init__.py`:
 
 ```python
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 ```
 
 `pyproject.toml` si ji odtud bere (`dynamic = ["version"]`), takže se obě čísla nemají jak
@@ -152,7 +152,8 @@ serveru zastihne:
 - **agent tam ještě není** – nainstaluje balíček i se závislostmi, zaregistruje službu
   a spustí ji,
 - **je tam starší verze** – ukončí tray aplikaci, zastaví službu, vymění jen balíček
-  `zabbixvms` a službu i tray zase spustí,
+  `zabbixvms`, doplní do konfigurace položky nové verze (viz *Aktualizace už nasazeného
+  agenta* níže) a službu i tray zase spustí,
 - **je tam stejná nebo novější verze** – nechá ji být a jen dohlédne, že služba běží.
 
 Než cokoli změní, ověří, že je v `PATH` Python a že wheely ve složce patří k jeho verzi.
@@ -218,9 +219,27 @@ Tři věci, na kterých ten postup stojí:
   zvýšit nejde, použijte místo `--upgrade` parametr `--force-reinstall`.
 
 Že agent zase běží, poznáte podle řádku `service ZabbixVms started` v logu
-`C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`. Konfigurace ve stejné složce
-zůstává aktualizací nedotčená; položky, které v ní nová verze postrádá, si agent při načtení
-doplní ve výchozích hodnotách.
+`C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log`.
+
+Konfiguraci ve stejné složce samotná výměna balíčku nezmění. Položky, které přinesla nová
+verze a v konfiguraci chybějí, si agent při načtení doplní výchozí hodnotou, se kterou pracuje
+stejně jako verze, která je neznala. Týká se to jen takových položek (dnes `period`
+a `raw_prefixes`); když v konfiguraci chybí cokoli jiného, třeba `system_id` turbíny, služba
+nenastartuje a v logu uvede, co chybí. Výchozí hodnota by tam poslala data jiné turbíny.
+
+Aby obsluha nové položky v souboru viděla, zapíše je tam `install.ps1` po výměně balíčku,
+dokud služba stojí. Stejný krok jde udělat i ručně:
+
+```
+zabbixvms-service complete-config
+```
+
+Příkaz jen přidá chybějící položky, stávající hodnoty nechá, a původní soubor uloží vedle jako
+`config.json.bak`. Když nic nechybí, soubor nezmění. Konfiguraci, kterou agent nepřijme,
+nechá beze změny a skončí s chybou. Soubor zapíše po svém, takže se může změnit odsazení
+a zalomení seznamů, hodnoty ne. Nespouštějte ho, když má někdo konfiguraci otevřenou
+v editoru: jeho uložení by doplněné položky zase smazalo. Službu kvůli němu restartovat
+netřeba, běžící agent má tytéž hodnoty doplněné v paměti.
 
 Odebrat a znovu nainstalovat službu (`zabbixvms-service remove` a `install`) je potřeba jen
 tehdy, když se mění samotné zakotvení služby:

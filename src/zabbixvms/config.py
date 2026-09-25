@@ -3,8 +3,10 @@ and the validation of the values the operator may set."""
 
 from __future__ import annotations
 
+import copy
 import os
 import re
+import shutil
 from importlib import resources
 from pathlib import Path
 
@@ -14,6 +16,9 @@ import jsonpickle
 PROGRAM_DATA_SUBDIR = Path("LogicElements") / "ZabbixVms"
 CONFIG_FILENAME = "config.json"
 DEFAULT_CONFIG_RESOURCE = "config_default.json"
+
+# Where complete_config() keeps the file as it was before it wrote into it.
+BACKUP_SUFFIX = ".bak"
 
 # Ranges accepted by the agent.
 MIN_TURBINES = 1
@@ -90,6 +95,17 @@ class Turbine:
                 )
 
 
+# Fields that came after the first release of the agent, with the value that makes an
+# agent reading a file without them work the way the version before them did. These,
+# and only these, may be missing: any other gap is a mistake in the file, and a default
+# standing in for it - the system_id of another turbine, an empty location - would send
+# wrong values instead of refusing to start.
+ADDED_FIELDS = {
+    ZabbixConfig: {"period": DEFAULT_PERIOD},
+    Turbine: {"raw_prefixes": []},
+}
+
+
 class Config:
     """Whole agent configuration, serialized to JSON by jsonpickle."""
 
@@ -116,35 +132,85 @@ class Config:
         for turbine in self.turbines:
             turbine.validate()
 
-    def fill_missing(self) -> "Config":
-        """Give values to what a configuration written by an older agent lacks.
+    def _parts(self):
+        """Every group of the configuration: where it sits and what it has to be."""
+        yield "zabbix", self.zabbix, ZabbixConfig
+        yield "database", self.database, DatabaseConfig
+        for index, turbine in enumerate(self.turbines):
+            yield f"turbines[{index}]", turbine, Turbine
+
+    def missing_fields(self) -> list[str]:
+        """What the configuration lacks that no default may stand in for.
+
+        A group that is something else than it should be counts as missing, since
+        none of its fields can be read either.
+        """
+        missing = [name for name in vars(Config()) if not hasattr(self, name)]
+        if missing:
+            return missing
+        if not isinstance(self.turbines, list):
+            return ["turbines"]
+        for place, part, kind in self._parts():
+            if not isinstance(part, kind):
+                missing.append(place)
+                continue
+            optional = ADDED_FIELDS.get(kind, {})
+            missing.extend(f"{place}.{name}" for name in vars(kind())
+                           if name not in optional and not hasattr(part, name))
+        return missing
+
+    def fill_missing(self) -> list[str]:
+        """Give the fields of ADDED_FIELDS to a configuration written before them.
 
         jsonpickle restores the attributes the file holds and never calls __init__,
         so a file from before a field existed would leave it missing altogether and
         reading it would raise AttributeError. An agent that is updated has to keep
-        working with the configuration that is already in ProgramData.
+        working with the configuration that is already in ProgramData. Returns where
+        a value was filled in, such as turbines[0].raw_prefixes.
         """
-        if not hasattr(self.zabbix, "period"):
-            self.zabbix.period = DEFAULT_PERIOD
-        for turbine in self.turbines:
-            if not hasattr(turbine, "raw_prefixes"):
-                turbine.raw_prefixes = []
-        return self
+        filled = []
+        for place, part, kind in self._parts():
+            for name, default in ADDED_FIELDS.get(kind, {}).items():
+                if not hasattr(part, name):
+                    # Every turbine gets a list of its own; one shared list would be
+                    # written out as a reference to where it first appeared.
+                    setattr(part, name, copy.deepcopy(default))
+                    filled.append(f"{place}.{name}")
+        return filled
 
     @staticmethod
-    def load(path: os.PathLike | str) -> "Config":
-        """Read a configuration from a JSON file written by store()."""
+    def read(path: os.PathLike | str) -> "Config":
+        """The configuration exactly as the file holds it, with nothing filled in.
+
+        A file that lacks anything but the fields of ADDED_FIELDS is refused here.
+        """
         path = Path(path)
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as err:
             raise ConfigError(f"cannot read configuration {path}: {err}") from err
 
-        # keys=True is the jsonpickle 5 default; passing it keeps both calls in step.
-        config = jsonpickle.decode(text, keys=True)
+        try:
+            # keys=True is the jsonpickle 5 default; passing it keeps both calls in step.
+            config = jsonpickle.decode(text, keys=True)
+        except Exception as err:
+            # jsonpickle tries every backend it has loaded and raises what the last one
+            # did, which may be YAML's error for a file that is broken JSON.
+            raise ConfigError(f"cannot read configuration {path}: {err}") from err
         if not isinstance(config, Config):
             raise ConfigError(f"{path} does not hold a configuration")
-        return config.fill_missing()
+        missing = config.missing_fields()
+        if missing:
+            raise ConfigError(f"{path} lacks {', '.join(missing)}")
+        return config
+
+    @staticmethod
+    def load(path: os.PathLike | str) -> "Config":
+        """Read a configuration from a JSON file written by store(), with the fields
+        of a newer agent filled in."""
+        config = Config.read(path)
+        config.fill_missing()
+        return config
 
     def store(self, path: os.PathLike | str) -> None:
         """Write the configuration as JSON with the jsonpickle type tags."""
@@ -193,3 +259,30 @@ def load_config(path: os.PathLike | str | None = None) -> Config:
     config = Config.load(path)
     config.validate()
     return config
+
+
+def complete_config(path: os.PathLike | str | None = None) -> list[str]:
+    """Write the fields a newer agent added into the configuration file.
+
+    Meant for an update, while the service is stopped: the agent itself never writes
+    the file (UC2-R4) and fills those fields in memory only. Writing them in shows the
+    operator what can be set. The values already there stay as they are and the file
+    as it was is kept beside it with BACKUP_SUFFIX; a file that lacks nothing, is not
+    there yet or is not valid is left alone. Returns what was added.
+    """
+    path = Path(path) if path is not None else config_path()
+    if not path.exists():
+        return []
+    config = Config.read(path)
+    added = config.fill_missing()
+    if not added:
+        return []
+    config.validate()
+
+    shutil.copy2(path, path.with_name(path.name + BACKUP_SUFFIX))
+    # Written aside and moved over, so an interrupted write never leaves a broken
+    # configuration behind.
+    fresh = path.with_name(path.name + ".tmp")
+    config.store(fresh)
+    os.replace(fresh, path)
+    return added

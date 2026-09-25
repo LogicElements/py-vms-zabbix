@@ -20,7 +20,14 @@ import win32serviceutil
 
 from zabbixvms import log as logging_setup
 from zabbixvms.agent import Agent
-from zabbixvms.config import data_folder, load_config
+from zabbixvms.config import (
+    BACKUP_SUFFIX,
+    ConfigError,
+    complete_config,
+    config_path,
+    data_folder,
+    load_config,
+)
 from zabbixvms.log import log
 
 SERVICE_NAME = "ZabbixVms"
@@ -246,12 +253,35 @@ def remove() -> None:
     win32serviceutil.RemoveService(SERVICE_NAME)
 
 
-def main(argv=None) -> None:
+def complete_config_command() -> int:
+    """Write the fields of a newer agent into the configuration; the exit code.
+
+    Everything is printed to standard output. install.ps1 runs this with
+    ErrorActionPreference Stop, and Windows PowerShell may turn a line on standard error
+    into a failure of the script itself, which would then stop before it starts the
+    service again.
+    """
+    path = config_path()
+    try:
+        added = complete_config(path)
+    except ConfigError as err:
+        print(f"configuration left as it is: {err}")
+        return 1
+    if added:
+        print(f"added to {path}: {', '.join(added)}; "
+              f"the file as it was is {path.name}{BACKUP_SUFFIX}")
+    else:
+        print(f"nothing to add to {path}")
+    return 0
+
+
+def main(argv=None) -> int | None:
     """Entry point of the zabbixvms-service command.
 
     install and remove are handled here so that the automatic start and the rights of
-    ordinary users are set without the operator passing anything extra; the remaining
-    commands (start, stop, restart, debug) are left to pywin32.
+    ordinary users are set without the operator passing anything extra; so is
+    complete-config, which the update runs. The remaining commands (start, stop,
+    restart, debug) are left to pywin32. What is returned is the exit code.
     """
     argv = list(sys.argv if argv is None else argv)
     command = argv[1] if len(argv) > 1 else ""
@@ -260,5 +290,8 @@ def main(argv=None) -> None:
         install()
     elif command == "remove":
         remove()
+    elif command == "complete-config":
+        return complete_config_command()
     else:
         win32serviceutil.HandleCommandLine(ZabbixVmsService, argv=argv)
+    return None

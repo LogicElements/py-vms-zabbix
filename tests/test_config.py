@@ -1,12 +1,15 @@
-"""Tests of the configuration: round trip, its place in ProgramData and the
-accepted ranges (UC2-R1, UC2-R3, UC2-R4, UC2-R5, UC2-R6, UC2-R7, UC6-R1)."""
+"""Tests of the configuration: round trip, its place in ProgramData, the accepted
+ranges and the fields a newer agent adds (UC2-R1, UC2-R3, UC2-R4, UC2-R5, UC2-R6,
+UC2-R7, UC2-R9, UC2-R10, UC6-R1)."""
 
+import re
 from pathlib import Path
 
 import pytest
 
 from zabbixvms import config as config_module
 from zabbixvms.config import (
+    ADDED_FIELDS,
     DEFAULT_PERIOD,
     MAX_PERIOD,
     MIN_PERIOD,
@@ -15,6 +18,7 @@ from zabbixvms.config import (
     DatabaseConfig,
     Turbine,
     ZabbixConfig,
+    complete_config,
     config_path,
     deploy_default,
     load_config,
@@ -308,3 +312,191 @@ def test_a_configuration_written_before_the_raw_data_prefixes_existed_still_load
 
     assert [turbine.raw_prefixes for turbine in loaded.turbines] == [[], []]
     loaded.validate()
+
+
+def store_without(path, *fields):
+    """Store make_config() and take the named fields out of the file again, the way a
+    file of an older agent or a slip of the operator would leave it. A field is a path
+    such as ("zabbix", "period") or ("turbines", 0, "system_id")."""
+    import json
+
+    make_config().store(path)
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    for field in fields:
+        holder = stored
+        for step in field[:-1]:
+            holder = holder[step]
+        del holder[field[-1]]
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+
+# What a file written by the first release of the agent lacks.
+FIRST_RELEASE = [("zabbix", "period"), ("turbines", 0, "raw_prefixes"),
+                 ("turbines", 1, "raw_prefixes")]
+
+
+def test_only_fields_added_after_the_first_release_may_be_missing():
+    """UC2-R9: the defaults are what a configuration without the field gets, and they
+    are the values the classes themselves start with."""
+    assert ADDED_FIELDS == {ZabbixConfig: {"period": DEFAULT_PERIOD},
+                            Turbine: {"raw_prefixes": []}}
+    for kind, fields in ADDED_FIELDS.items():
+        for name, default in fields.items():
+            assert getattr(kind(), name) == default
+
+
+def test_fill_missing_says_what_it_filled_in(tmp_path):
+    """UC2-R9: every field that was missing, with the place it sits."""
+    path = tmp_path / "config.json"
+    store_without(path, *FIRST_RELEASE)
+
+    config = Config.read(path)
+
+    assert config.fill_missing() == ["zabbix.period", "turbines[0].raw_prefixes",
+                                     "turbines[1].raw_prefixes"]
+    assert config.fill_missing() == []
+
+
+def test_a_file_of_the_first_release_loads_without_being_written(tmp_path):
+    """UC2-R4, UC2-R9: the fields are filled in memory, the file stays as it was."""
+    path = tmp_path / "config.json"
+    store_without(path, *FIRST_RELEASE)
+    before = path.read_bytes()
+
+    loaded = load_config(path)
+
+    assert loaded.zabbix.period == DEFAULT_PERIOD
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("field, named", [
+    (("turbines", 0, "system_id"), "turbines[0].system_id"),
+    (("turbines", 1, "name"), "turbines[1].name"),
+    (("zabbix", "location"), "zabbix.location"),
+    (("database", "password"), "database.password"),
+    (("turbines",), "turbines"),
+    (("zabbix",), "zabbix"),
+])
+def test_a_missing_field_nothing_may_stand_in_for_is_refused(tmp_path, field, named):
+    """UC2-R9: a default for these would send the values of another turbine or under
+    another host, so the configuration is refused and says what it lacks."""
+    path = tmp_path / "config.json"
+    store_without(path, field)
+
+    with pytest.raises(ConfigError, match=re.escape(f"lacks {named}")):
+        Config.load(path)
+
+
+def test_a_group_of_another_kind_counts_as_missing(tmp_path):
+    """UC2-R9: a group without its type tag cannot be read either."""
+    path = tmp_path / "config.json"
+    store_without(path, ("zabbix", "py/object"))
+
+    with pytest.raises(ConfigError, match="lacks zabbix"):
+        Config.load(path)
+
+
+def test_a_file_that_is_not_json_is_a_configuration_error(tmp_path):
+    """A broken file is refused with a text that says so, not with a traceback."""
+    path = tmp_path / "config.json"
+    path.write_text('{"py/object": "zabbixvms.config.Config",', encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="cannot read configuration"):
+        Config.load(path)
+
+
+def test_complete_config_writes_in_the_fields_of_a_newer_agent(tmp_path):
+    """UC2-R10: the missing fields reach the file with their defaults."""
+    import json
+
+    path = tmp_path / "config.json"
+    store_without(path, *FIRST_RELEASE)
+
+    added = complete_config(path)
+
+    assert added == ["zabbix.period", "turbines[0].raw_prefixes",
+                     "turbines[1].raw_prefixes"]
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["zabbix"]["period"] == DEFAULT_PERIOD
+    # Each turbine has a list of its own, not a reference to the list of the first.
+    assert [turbine["raw_prefixes"] for turbine in stored["turbines"]] == [[], []]
+    assert Config.read(path).fill_missing() == []
+
+
+def test_complete_config_keeps_every_value_that_was_there(tmp_path):
+    """UC2-R10: only fields are added, nothing that was set changes."""
+    path = tmp_path / "config.json"
+    store_without(path, *FIRST_RELEASE)
+
+    complete_config(path)
+
+    loaded, original = Config.read(path), make_config()
+    assert vars(loaded.database) == vars(original.database)
+    assert {name: value for name, value in vars(loaded.zabbix).items()
+            if name != "period"} == \
+        {name: value for name, value in vars(original.zabbix).items() if name != "period"}
+    assert [(t.name, t.system_id, t.buffers) for t in loaded.turbines] == \
+        [(t.name, t.system_id, t.buffers) for t in original.turbines]
+
+
+def test_complete_config_keeps_the_file_as_it_was_beside_it(tmp_path):
+    """UC2-R10: the previous file stays as config.json.bak, and nothing else is left."""
+    path = tmp_path / "config.json"
+    store_without(path, *FIRST_RELEASE)
+    before = path.read_bytes()
+
+    complete_config(path)
+
+    assert (tmp_path / "config.json.bak").read_bytes() == before
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == \
+        ["config.json", "config.json.bak"]
+
+
+def test_complete_config_leaves_a_complete_file_alone(tmp_path):
+    """UC2-R10: nothing missing, nothing written and no backup."""
+    path = tmp_path / "config.json"
+    make_config().store(path)
+    before = path.read_bytes()
+
+    assert complete_config(path) == []
+    assert path.read_bytes() == before
+    assert not (tmp_path / "config.json.bak").exists()
+
+
+def test_complete_config_without_a_configuration_does_nothing(tmp_path):
+    """UC2-R10: a first installation has no file yet; the service deploys it."""
+    path = tmp_path / "config.json"
+
+    assert complete_config(path) == []
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("broken", ["missing system_id", "five turbines"])
+def test_complete_config_leaves_an_invalid_file_alone(tmp_path, broken):
+    """UC2-R10: a configuration the agent refuses is not touched, it is reported."""
+    import json
+
+    path = tmp_path / "config.json"
+    if broken == "missing system_id":
+        store_without(path, *FIRST_RELEASE, ("turbines", 0, "system_id"))
+    else:
+        Config(turbines=[Turbine(name=f"TG{i}", system_id=i) for i in range(5)]).store(path)
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        del stored["zabbix"]["period"]
+        path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+    before = path.read_bytes()
+
+    with pytest.raises(ConfigError):
+        complete_config(path)
+
+    assert path.read_bytes() == before
+    assert not (tmp_path / "config.json.bak").exists()
+
+
+def test_complete_config_works_on_the_active_configuration_by_default():
+    """UC2-R10: the update writes into the file in ProgramData."""
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    store_without(path, ("zabbix", "period"))
+
+    assert complete_config() == ["zabbix.period"]

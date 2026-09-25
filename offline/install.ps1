@@ -223,14 +223,30 @@ if ($LASTEXITCODE -ne 0) {
     Stop-WithError 'pip skončil s chybou, služba zůstala zastavená.'
 }
 
+$agent = Join-Path $scripts 'zabbixvms-service.exe'
+if (-not (Test-Path $agent)) {
+    Stop-WithError "Příkaz $agent po instalaci neexistuje."
+}
+
+# --- fields the new version added to the configuration --------------------------------
+
+# The service is stopped here, so nothing else writes the file. The agent never writes it
+# itself, it only fills the new fields in memory; writing them in lets the operator see
+# what there is to set. A configuration the agent refuses is left alone, and the start
+# of the service below reports it.
+if (Test-Path (Join-Path $ConfigFolder 'config.json')) {
+    Write-Host 'Doplňuji do konfigurace položky nové verze...'
+    & $agent complete-config
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ('VAROVÁNÍ: konfigurace zůstala beze změny, protože ji agent nepřijme. ' +
+            'Opravte ji podle zprávy výše.') -ForegroundColor Yellow
+    }
+}
+
 # --- register the service when it is not there yet -----------------------------------
 
 $fresh = $false
 if (-not $service) {
-    $agent = Join-Path $scripts 'zabbixvms-service.exe'
-    if (-not (Test-Path $agent)) {
-        Stop-WithError "Příkaz $agent po instalaci neexistuje."
-    }
     Write-Host 'Registruji službu...'
     & $agent install
     if ($LASTEXITCODE -ne 0) {

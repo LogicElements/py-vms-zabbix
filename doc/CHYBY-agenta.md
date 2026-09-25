@@ -65,7 +65,11 @@ metriku odeslat nemůže:
 - `configuration has 5 turbines, 1 to 4 are supported`
 - `turbine 'TEST' has 3 buffers, at most 2 are supported`
 - `turbine 'TEST' has raw data prefix 'btt-tg1', only letters, digits and underscores are allowed`
-- `cannot read configuration ...` u poškozeného souboru
+- `C:\ProgramData\LogicElements\ZabbixVms\config.json lacks turbines[0].system_id`
+  Konfiguraci chybí položka, za kterou agent výchozí hodnotu nedosadí, protože by četl
+  jinou turbínu nebo posílal pod jiného hosta. Výchozí hodnotu dostanou jen položky, které
+  přibyly v novější verzi agenta; ty si doplní sám.
+- `cannot read configuration ...` u poškozeného souboru, například s chybou v zápisu JSON
 
 Tyhle chyby najdete v logu a v Event Logu. V Zabbixu se projeví jen nepřímo, triggerem
 „Z hostu nepřišla žádná hodnota 5m“ — proto má tento trigger vyšší prioritu než hlášená

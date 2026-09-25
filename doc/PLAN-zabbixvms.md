@@ -27,6 +27,7 @@
 | 6 | Logování a vlastní stav agenta | [x] |
 | 7 | Šablona pro Zabbix a návod | [x] |
 | 8 | Sledování surových dat | [ ] |
+| 9 | Doplňování konfigurace | [ ] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -300,3 +301,29 @@ který Python importuje. Ve `.venv` s běžnou (ne editovatelnou) instalací je 
 v `site-packages`, ne soubor v `src`, takže se přegenerovává s `PYTHONPATH=src`. Hlídá to test
 `test_the_file_in_the_package_is_what_the_generator_builds`, který selže, když zůstane
 soubor v `src` starý.
+
+### Etapa 9 – Doplňování konfigurace
+**Účel:** Doplňovat do konfigurace jen položky z novějších verzí a při aktualizaci je zapsat do souboru.
+**Řeší:** UC2-R7, UC2-R9, UC2-R10
+**Kroky:**
+1. Nahradit podmínky v `Config.fill_missing()` tabulkou `ADDED_FIELDS` v `config.py` s poli přidanými po první verzi (`ZabbixConfig.period`, `Turbine.raw_prefixes`) a jejich výchozími hodnotami; `fill_missing()` vrací seznam doplněných položek.
+2. Při načtení konfigurace odmítnout soubor, ve kterém chybí jiná položka než z `ADDED_FIELDS`, s `ConfigError`, který chybějící položky vyjmenuje.
+3. Přidat do `config.py` funkci `complete_config()`: načte konfiguraci bez doplnění, doplní položky z `ADDED_FIELDS`, ověří platnost, uloží zálohu `config.json.bak` a nový soubor zapíše přes dočasný soubor; když nic nechybí nebo soubor neexistuje, nic nezmění.
+4. Přidat do `zabbixvms-service` příkaz `complete-config`, který zavolá `complete_config()`, vypíše doplněné položky a u neplatné konfigurace skončí nenulovým kódem.
+5. Volat v `install.ps1` po výměně balíčku a před spuštěním služby `zabbixvms-service complete-config`, pokud konfigurace existuje; neúspěch jen ohlásit.
+6. Napsat testy: odmítnutí konfigurace bez `system_id`, `location` a celé skupiny, seznam doplněných položek, zápis chybějících položek se zachováním ostatních hodnot, záloha s původním obsahem, beze změny u úplné, chybějící a neplatné konfigurace, příkaz `complete-config` a jeho návratový kód.
+7. Doplnit dokumentaci: `README.md`, `BUILD-balicku.md` (aktualizace), `CHYBY-agenta.md` (chybějící položka), `NAVRH-zabbixvms.md`.
+8. Zvýšit verzi balíčku na 0.2.1.
+9. Ručně ověřit aktualizaci přes `install.ps1` na stroji s konfigurací starší verze: nové položky v `config.json`, záloha `config.json.bak`, služba běží.
+
+**Stav:** kroky 1 až 8 jsou hotové a testy prošly, takže UC2-R9 je Hotovo. UC2-R7 měl
+upřesněné DoD o výjimku pro instalační skript, a protože se tím jeho stávající testy
+nezměnily, je zase Hotovo. UC2-R10 zůstává Zbývá do ručního ověření v kroku 9: Python
+část je otestovaná, `install.ps1` se zatím jen zkontroloval parserem PowerShellu.
+Příkaz `complete-config` se vyzkoušel na souboru ve tvaru z verze 0.1.x v dočasné
+složce: doplnil `period` a oba `raw_prefixes` a druhý běh už nic nezměnil.
+
+Chyba při čtení poškozeného souboru dřív prošla ven jako výjimka jsonpickle. Knihovna
+zkouší postupně všechny načtené backendy a vyhodí chybu toho posledního, takže u rozbitého
+JSON přišla chyba parseru YAML. Teď z ní vzniká `ConfigError` s textem
+`cannot read configuration`, jak ho popisuje `CHYBY-agenta.md`.

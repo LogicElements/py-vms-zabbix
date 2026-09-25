@@ -20,6 +20,8 @@
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření datové složky z kontextového menu ikony | Hotovo | tests/test_tray.py |
+| UC2-R9 | Chybějící položku doplní výchozí hodnota jen u položek z novějších verzí | Hotovo | tests/test_config.py |
+| UC2-R10 | Zápis nových položek do konfigurace při aktualizaci instalačním skriptem | Zbývá | |
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
@@ -124,7 +126,9 @@ byla potřeba oprávnění administrátora.
 Aktérem je obsluha serveru VMS. Cílem je nastavit agenta na danou instalaci – kam odesílat
 metriky a které turbíny sledovat – bez zásahu do kódu. Spouštěčem je nasazení agenta na nový
 server nebo změna instalace, například jiná turbína nebo jiný Zabbix server. Obsluha nastaví
-hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
+hodnoty v konfiguraci a po restartu služby agent pracuje podle nich. Při aktualizaci agenta
+se do konfigurace doplní položky, které přinesla nová verze, takže je obsluha vidí a může je
+nastavit.
 
 ### UC2-R1
 **Popis:** Konfigurace agenta je uložená v jednom souboru JSON, který vznikne serializací konfigurační třídy nástrojem jsonpickle.
@@ -180,7 +184,7 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 - Agent čte konfiguraci ze souboru `C:\ProgramData\LogicElements\ZabbixVms\config.json`.
 - Pokud tento soubor neexistuje, vytvoří se při prvním spuštění z výchozí konfigurace dodané v balíčku.
 - Pokud soubor existuje, agent ho použije a výchozí konfiguraci z balíčku ignoruje.
-- Instalace ani aktualizace balíčku obsah souboru v `ProgramData` nezmění.
+- Instalace ani aktualizace balíčku přes `pip` obsah souboru v `ProgramData` nezmění; jedinou výjimkou je doplnění nových položek instalačním skriptem podle UC2-R10.
 
 ### UC2-R8
 **Popis:** Z kontextového menu ikony v systray lze otevřít datovou složku agenta, ve které leží konfigurace i log.
@@ -189,6 +193,23 @@ hodnoty v konfiguraci a po restartu služby agent pracuje podle nich.
 - Volbou této položky se otevře složka `C:\ProgramData\LogicElements\ZabbixVms` a jsou v ní vidět konfigurační soubor i logovací soubor.
 - Konfiguraci lze z otevřené složky otevřít k editaci; po uložení změn a restartu služby agent pracuje podle nových hodnot.
 - Otevření složky ani editace konfigurace nevyžadují oprávnění administrátora.
+
+### UC2-R9
+**Popis:** Položka, která v konfiguraci chybí, se doplní výchozí hodnotou jen tehdy, když přibyla v novější verzi agenta.
+**DoD:**
+- Položky přidané po první verzi agenta, tedy `period` ve skupině odesílání do Zabbixu a `raw_prefixes` u turbíny, se při načtení konfigurace, která je nemá, doplní hodnotou, se kterou agent pracuje stejně jako verze, která je neznala: 5 sekund a prázdný seznam.
+- Konfiguraci, ve které chybí jiná položka, například `system_id` turbíny nebo `location`, agent odmítne jako neplatnou a v chybě uvede, která položka chybí.
+- Doplnění probíhá jen v paměti, soubor konfigurace se jím nezmění (UC2-R4).
+
+### UC2-R10
+**Popis:** Při aktualizaci agenta instalačním skriptem se do souboru konfigurace zapíšou položky, které přinesla nová verze.
+**DoD:**
+- Instalační skript `install.ps1` po výměně balíčku a před spuštěním služby zapíše do konfigurace v `ProgramData` položky podle UC2-R9, které v ní chybí, s jejich výchozí hodnotou.
+- Hodnoty, které už v konfiguraci jsou, zůstanou beze změny.
+- Původní soubor zůstane vedle nového jako `config.json.bak`.
+- Když v konfiguraci nic nechybí nebo když konfigurace ještě neexistuje, soubor zůstane beze změny a záloha nevznikne.
+- Konfiguraci, kterou agent odmítá jako neplatnou, skript nemění; ohlásí to a pokračuje.
+- Totéž jde spustit ručně příkazem `zabbixvms-service complete-config`.
 
 ## UC3 – Sada metrik odesílaných do Zabbixu
 

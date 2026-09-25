@@ -52,7 +52,9 @@ celý stroj to platí vždycky, u virtuálního prostředí až po jeho aktivaci
 Konfigurace (přístupové údaje k MySQL a Zabbixu, seznam monitorovaných turbín) je JSON
 v souboru `C:\ProgramData\LogicElements\ZabbixVms\config.json`. Pokud soubor neexistuje,
 vytvoří se při prvním spuštění z výchozí šablony dodané v balíčku; existující soubor
-zůstává beze změny i při aktualizaci balíčku.
+zůstává beze změny i při aktualizaci balíčku. Jen instalační skript z `offline` do něj při
+aktualizaci doplní položky, které přinesla nová verze, a původní soubor nechá vedle jako
+`config.json.bak`.
 
 ## Vývoj
 

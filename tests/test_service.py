@@ -1,6 +1,6 @@
-"""Tests of the Windows service: the loop is started and stopped with the service
-and the security descriptor grants ordinary users control but nothing more
-(UC1-R2, UC1-R3, UC1-R7)."""
+"""Tests of the Windows service: the loop is started and stopped with the service,
+the security descriptor grants ordinary users control but nothing more, and the
+update writes the new fields into the configuration (UC1-R2, UC1-R3, UC1-R7, UC2-R10)."""
 
 import ntsecuritycon
 import pytest
@@ -344,3 +344,53 @@ def test_main_leaves_the_other_commands_to_pywin32(monkeypatch):
     service_module.main(["zabbixvms-service", "start"])
 
     assert handled == [(ZabbixVmsService, ["zabbixvms-service", "start"])]
+
+
+def test_complete_config_command_writes_in_what_a_newer_agent_added(capsys):
+    """UC2-R10: the update runs zabbixvms-service complete-config."""
+    import json
+
+    from zabbixvms.config import Config, config_path
+
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    Config().store(path)
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    del stored["turbines"][0]["raw_prefixes"]
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+    code = service_module.main(["zabbixvms-service", "complete-config"])
+
+    assert code == 0
+    assert "turbines[0].raw_prefixes" in capsys.readouterr().out
+    assert (path.parent / "config.json.bak").exists()
+
+
+def test_complete_config_command_on_a_complete_file_says_so(capsys):
+    from zabbixvms.config import Config, config_path
+
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    Config().store(path)
+
+    assert service_module.main(["zabbixvms-service", "complete-config"]) == 0
+    assert "nothing to add" in capsys.readouterr().out
+
+
+def test_complete_config_command_fails_on_a_configuration_it_refuses(capsys):
+    """UC2-R10: install.ps1 learns from the exit code that the file was left alone,
+    and the reason is on standard output, where PowerShell does not take it for a
+    failure of its own."""
+    from zabbixvms.config import config_path
+
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    path.write_text("{", encoding="utf-8")
+
+    code = service_module.main(["zabbixvms-service", "complete-config"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "left as it is" in captured.out
+    assert captured.err == ""
+    assert path.read_text(encoding="utf-8") == "{"
