@@ -42,7 +42,7 @@ src/zabbixvms/
 | `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů a prefixů surových dat, doplnění položek z novějších verzí v paměti i do souboru | UC2-R1 až UC2-R10, UC6-R1 |
 | `log.py` | logovací soubor vedle konfigurace, rotace, souběžný zápis služby i tray aplikace, zápis do Event Logu | UC5-R1, UC5-R2 |
 | `metrics.py` | definice metrik: klíč, název, typ hodnoty, jednotka, popis; definice triggerů: název, klíč metriky, podmínka, priorita | UC3-R1, UC3-R2, UC5-R4 |
-| `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC6-R2 až UC6-R4 |
+| `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC6-R2 až UC6-R4 |
 | `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>`, kontrola odmítnutých hodnot | UC2-R2, UC2-R5 |
 | `agent.py` | cyklus přes turbíny, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6 |
 | `service.py` | registrace a odregistrace služby, automatický start, oprávnění k ovládání, příkaz `complete-config` pro aktualizaci | UC1-R2, UC1-R3, UC1-R7, UC2-R10 |
@@ -89,8 +89,17 @@ vzorem `LIKE` pro každý prefix. Podtržítko je ve vzoru `LIKE` zástupný zna
 zužuje, o tom, jestli tabulka k prefixu patří, rozhoduje až celý název s platným datem na
 konci. Datum se čte podle počtu číslic: 8 u TVMS, 14 u VMS.
 
-`UPDATE_TIME` je u tabulek MyISAM, jaké v `BVMS` jsou, přesné. U InnoDB ho MySQL 5.7 drží jen
-v paměti, takže po restartu MySQL je NULL, dokud se do tabulky něco nezapíše; agent ho do té
-doby hlásí jako jeden měsíc. MySQL 8 navíc hodnoty z `information_schema` drží v mezipaměti
-podle proměnné `information_schema_stats_expiry`, ve výchozím stavu celý den; kdyby se na něj
-přešlo, musí se ta proměnná nastavit na 0.
+U MyISAM je `UPDATE_TIME` čas poslední změny datového souboru. U InnoDB, se kterým pracují
+cílové servery, je to čas posledního `COMMIT`, který MySQL drží jen v paměti. Po restartu
+MySQL je proto NULL, dokud se do tabulky něco nezapíše, a agent ho do té doby hlásí jako
+jeden měsíc.
+
+MySQL 8 navíc `TABLE_ROWS`, `UPDATE_TIME` a další statistiky v `information_schema.TABLES`
+nečte pokaždé z úložiště. Vrací je z mezipaměti, kterou obnovuje až po uplynutí
+`information_schema_stats_expiry` sekund, ve výchozím stavu jednou denně. Na serverech se to
+projevilo tak, že plnící se tabulka surových dat měla v `information_schema` čas zápisu
+z chvíle, kdy se na ni agent poprvé zeptal. Workbench po obnovení ukázal čerstvé hodnoty,
+agent dál ty staré. Stejně zastarale mohl chodit i počet řádků bufferů. Agent si proto po
+každém připojení nastaví `SET SESSION information_schema_stats_expiry = 0` (UC4-R7). Platí
+to jen pro jeho připojení, server se nemění. MySQL 5.7 tu proměnnou nezná a mezipaměť nemá,
+takže chybu neznámé proměnné agent přejde.

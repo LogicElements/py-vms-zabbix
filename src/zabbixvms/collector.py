@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import mysql.connector
+from mysql.connector import errorcode
 
 from zabbixvms.config import DatabaseConfig, Turbine
 
@@ -158,6 +159,25 @@ class Collector:
             # of rows per period does not need the speed of the C extension.
             use_pure=True,
         )
+        self._read_live_statistics()
+
+    def _read_live_statistics(self) -> None:
+        """Have information_schema read TABLE_ROWS and UPDATE_TIME from the engine.
+
+        MySQL 8 answers them from a cache it refreshes after
+        information_schema_stats_expiry seconds, a day unless set otherwise, so a
+        raw data table being filled showed the write time of when it was first asked
+        about. Zero makes this session read the engine on every query and leaves the
+        server as it is. MySQL 5.7 has no such cache and does not know the variable.
+        """
+        cursor = self._connection.cursor(dictionary=True)
+        try:
+            cursor.execute("SET SESSION information_schema_stats_expiry = 0")
+        except mysql.connector.Error as err:
+            if err.errno != errorcode.ER_UNKNOWN_SYSTEM_VARIABLE:
+                raise
+        finally:
+            cursor.close()
 
     @property
     def is_connected(self) -> bool:

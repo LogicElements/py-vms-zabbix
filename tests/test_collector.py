@@ -1,11 +1,13 @@
 """Tests of the collector against faked database objects: the computations of the
 source table, the -1 limit, the zeros of an unconfigured buffer and the raw data tables
-(UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC3-R3, UC6-R2, UC6-R3, UC6-R4)."""
+(UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC4-R7, UC3-R3, UC6-R2, UC6-R3, UC6-R4)."""
 
 import re
 from datetime import datetime, timedelta
 
+import mysql.connector
 import pytest
+from mysql.connector import errorcode
 
 from zabbixvms import metrics
 from zabbixvms.collector import (
@@ -76,6 +78,12 @@ class FakeCursor:
         self._rows = []
 
     def execute(self, query, params=None):
+        if query.startswith("SET "):
+            # Settings of the session are kept apart from the queries for values.
+            if self._fake.refuse_settings is not None:
+                raise self._fake.refuse_settings
+            self._fake.settings.append(query)
+            return
         self._fake.executed.append((query, params))
         if " LIKE " in query:
             patterns = [like_regex(pattern) for pattern in params[1:]]
@@ -103,11 +111,15 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, info_rows=(), table_rows=None, raw_tables=None):
+    def __init__(self, info_rows=(), table_rows=None, raw_tables=None,
+                 refuse_settings=None):
         self.info_rows = list(info_rows)
         self.table_rows = dict(table_rows or {})
         # Raw data tables by name, each with its UPDATE_TIME.
         self.raw_tables = dict(raw_tables or {})
+        # What a SET statement raises instead of taking effect, if anything.
+        self.refuse_settings = refuse_settings
+        self.settings = []
         self.executed = []
         self.closed_cursors = 0
         self.closed = False
@@ -633,3 +645,53 @@ def test_close_releases_the_connection():
     collector.close()
 
     assert connection.closed
+
+
+STATS_EXPIRY_OFF = "SET SESSION information_schema_stats_expiry = 0"
+
+
+def test_the_session_reads_the_statistics_from_the_engine():
+    """UC4-R7: MySQL 8 would answer TABLE_ROWS and UPDATE_TIME from a cache refreshed
+    once a day; the session of the agent asks the engine instead."""
+    connection = FakeConnection()
+
+    make_collector(connection)
+
+    assert connection.settings == [STATS_EXPIRY_OFF]
+
+
+def test_the_setting_is_made_again_on_every_new_connection():
+    """UC4-R7: after a failed cycle the connection is opened afresh, and a session
+    setting does not outlive the session it was made in."""
+    connections = [FakeConnection(), FakeConnection()]
+    collector = Collector(DatabaseConfig(), connect=lambda **kwargs: connections.pop(0))
+    first, second = connections
+
+    collector.connect()
+    collector.close()
+    collector.connect()
+
+    assert first.settings == second.settings == [STATS_EXPIRY_OFF]
+
+
+def test_a_server_without_the_statistics_cache_is_fine():
+    """UC4-R7: MySQL 5.7 does not know the variable, and has no cache to turn off."""
+    unknown = mysql.connector.errors.DatabaseError(
+        msg="Unknown system variable 'information_schema_stats_expiry'",
+        errno=errorcode.ER_UNKNOWN_SYSTEM_VARIABLE)
+    turbine = Turbine(name="TG1", system_id=11, buffers=[])
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)], refuse_settings=unknown)
+
+    values = make_collector(connection).collect(turbine, NOW)
+
+    assert values["vms.info_age"] == 3
+
+
+def test_another_failure_of_the_setting_is_not_swallowed():
+    """Only the unknown variable means there is no cache; anything else is a fault."""
+    denied = mysql.connector.errors.ProgrammingError(
+        msg="Access denied", errno=errorcode.ER_SPECIFIC_ACCESS_DENIED_ERROR)
+    connection = FakeConnection(refuse_settings=denied)
+
+    with pytest.raises(mysql.connector.Error):
+        make_collector(connection)

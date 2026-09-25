@@ -32,6 +32,7 @@
 | UC4-R4 | Stáří v celých sekundách proti času měření, saturované na jeden měsíc | Hotovo | tests/test_collector.py |
 | UC4-R5 | Buffery: stáří jako maximum, bulk a řádky jako součet přes nastavené buffery | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva mezi cykly měření nastavitelná v rozsahu 5 až 120 sekund | Hotovo | tests/test_agent.py |
+| UC4-R7 | Hodnoty z `information_schema` aktuální, ne z mezipaměti statistik MySQL 8 | Zbývá | |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
@@ -336,6 +337,14 @@ hodnoty metrik a odešle je do Zabbixu. Zdroj každé metriky určuje tabulka n�
 - Povolený rozsah je 5 až 120 sekund; konfiguraci s hodnotou mimo tento rozsah agent odmítne jako neplatnou.
 - Není-li prodleva v konfiguraci uvedená, použije se 5 sekund, takže konfigurace zapsaná starší verzí agenta zůstává platná.
 - Jeden cyklus zahrnuje odeslání metrik všech turbín z konfigurace.
+
+### UC4-R7
+**Popis:** Hodnoty z `information_schema.TABLES` agent čte aktuální, ne z mezipaměti statistik MySQL.
+**DoD:**
+- Agent si pro své připojení k MySQL nastaví `information_schema_stats_expiry` na 0, takže MySQL 8 čte `TABLE_ROWS` a `UPDATE_TIME` při každém dotazu přímo z úložiště, ne z mezipaměti obnovované ve výchozím stavu jednou denně.
+- Nastavení platí jen pro připojení agenta, globální nastavení serveru se nemění.
+- Nastavení se obnoví při každém novém připojení agenta k databázi.
+- Na serveru, který tuto proměnnou nezná (MySQL 5.7), se agent připojí a pracuje beze změny.
 
 ## UC5 – Hlášení chyb a provozních událostí
 

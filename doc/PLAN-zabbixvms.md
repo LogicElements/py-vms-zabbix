@@ -28,6 +28,7 @@
 | 7 | Šablona pro Zabbix a návod | [x] |
 | 8 | Sledování surových dat | [ ] |
 | 9 | Doplňování konfigurace | [ ] |
+| 10 | Aktuální statistiky z information_schema | [ ] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -327,3 +328,24 @@ Chyba při čtení poškozeného souboru dřív prošla ven jako výjimka jsonpi
 zkouší postupně všechny načtené backendy a vyhodí chybu toho posledního, takže u rozbitého
 JSON přišla chyba parseru YAML. Teď z ní vzniká `ConfigError` s textem
 `cannot read configuration`, jak ho popisuje `CHYBY-agenta.md`.
+
+### Etapa 10 – Aktuální statistiky z information_schema
+**Účel:** Číst `TABLE_ROWS` a `UPDATE_TIME` na MySQL 8 aktuální, ne z mezipaměti obnovované jednou denně.
+**Řeší:** UC4-R7
+**Kroky:**
+1. Nastavit v `Collector.connect()` hned po připojení `SET SESSION information_schema_stats_expiry = 0`; chybu `ER_UNKNOWN_SYSTEM_VARIABLE` serveru bez této proměnné přejít, jinou chybu nechat projít.
+2. Upravit `FakeConnection` v testech collectoru, aby příkazy `SET` zaznamenávala zvlášť a uměla na ně odpovědět chybou.
+3. Napsat testy: nastavení po připojení, nastavení znovu po novém připojení, přechod přes neznámou proměnnou, propuštění jiné chyby.
+4. Doplnit `NAVRH-zabbixvms.md` o mezipaměť statistik MySQL 8.
+5. Zvýšit verzi balíčku na 0.2.2.
+6. Ručně ověřit na serveru s MySQL 8: `vms.raw_write_age` drží malé hodnoty i při přepnutí tabulek a odpovídá `UPDATE_TIME`, který ukazuje Workbench po obnovení.
+
+**Stav:** kroky 1 až 5 jsou hotové a testy prošly. Databázové testy proti lokální MySQL 5.7
+ověřily, že agent chybu neznámé proměnné přejde. UC4-R7 zůstává Zbývá, dokud se v kroku 6
+neověří, že na MySQL 8 hodnoty opravdu chodí aktuální; lokálně MySQL 8 k dispozici není.
+
+Na tuhle příčinu se přišlo oklikou. Nejdřív to vypadalo, že agent při přepnutí tabulek
+vybírá tu starou, pak na commit nové tabulky zdržený exportem. Rozhodl až údaj, že i na
+dalších serverech se tabulka plní, `UPDATE_TIME` přitom stojí a po obnovení ve Workbenchi
+je čerstvý. Pozor tedy u každé hodnoty ze statistik `information_schema` na MySQL 8:
+bez tohoto nastavení je až den stará.
