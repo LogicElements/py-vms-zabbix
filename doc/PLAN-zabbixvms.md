@@ -28,8 +28,8 @@
 | 7 | Šablona pro Zabbix a návod | [x] |
 | 8 | Sledování surových dat | [x] |
 | 9 | Doplňování konfigurace | [x] |
-| 10 | Aktuální statistiky z information_schema | [ ] |
-| 11 | Připojení bez otevřené transakce | [ ] |
+| 10 | Aktuální statistiky z information_schema | [x] |
+| 11 | Připojení bez otevřené transakce | [x] |
 | 12 | Nová tabulka surových dat bez zápisu | [x] |
 
 
@@ -344,9 +344,9 @@ JSON přišla chyba parseru YAML. Teď z ní vzniká `ConfigError` s textem
 5. Zvýšit verzi balíčku na 0.2.2.
 6. Ručně ověřit na serveru s MySQL 8: `vms.raw_write_age` drží malé hodnoty i při přepnutí tabulek a odpovídá `UPDATE_TIME`, který ukazuje Workbench po obnovení.
 
-**Stav:** kroky 1 až 5 jsou hotové a testy prošly. Databázové testy proti lokální MySQL 5.7
-ověřily, že agent chybu neznámé proměnné přejde. UC4-R7 zůstává Zbývá, dokud se v kroku 6
-neověří, že na MySQL 8 hodnoty opravdu chodí aktuální; lokálně MySQL 8 k dispozici není.
+**Stav:** hotovo. Testy prošly a databázové testy proti lokální MySQL 5.7 ověřily, že agent
+chybu neznámé proměnné přejde. Ruční krok 6 prošel: na serverech s MySQL 8 chodí stáří
+zápisu aktuální i přes přepnutí tabulek, takže UC4-R7 je Hotovo.
 
 Na tuhle příčinu se přišlo oklikou. Nejdřív to vypadalo, že agent při přepnutí tabulek
 vybírá tu starou, pak na commit nové tabulky zdržený exportem. Rozhodl až údaj, že i na
@@ -365,10 +365,11 @@ bez tohoto nastavení je až den stará.
 5. Zvýšit verzi balíčku na 0.2.3.
 6. Ručně ověřit na serveru s MySQL 8: po přepnutí tabulek surových dat a po smazání staré tabulky hlásí agent bez restartu služby správný počet tabulek i stáří zápisu.
 
-**Stav:** kroky 1 až 5 jsou hotové a testy prošly. Příčinu potvrdil server: služba na
-připojení otevřeném od svého startu hlásila u TG42 dvě tabulky surových dat, nové připojení
-vidělo jednu a po restartu služby hlásila jednu i ona. UC4-R8 zůstává Zbývá do kroku 6, tedy
-dokud verze 0.2.3 nepřečká přepnutí tabulek bez restartu.
+**Stav:** hotovo. Testy prošly. Příčinu potvrdil server: služba na připojení otevřeném od
+svého startu hlásila u TG42 dvě tabulky surových dat, nové připojení vidělo jednu a po
+restartu služby hlásila jednu i ona. Ruční krok 6 prošel: agent přečkal přepnutí tabulek
+i smazání staré tabulky bez restartu služby a hlásil správný počet tabulek i stáří zápisu,
+takže UC4-R8 je Hotovo.
 
 ### Etapa 12 – Nová tabulka surových dat bez zápisu
 **Účel:** Nehlásit chybu zápisu ve chvíli, kdy systém novou tabulku surových dat založil, ale ještě do ní nezapsal.

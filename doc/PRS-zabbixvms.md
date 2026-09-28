@@ -32,8 +32,8 @@
 | UC4-R4 | Stáří v celých sekundách proti času měření, saturované na jeden měsíc | Hotovo | tests/test_collector.py |
 | UC4-R5 | Buffery: stáří jako maximum, bulk a řádky jako součet přes nastavené buffery | Hotovo | tests/test_collector.py |
 | UC4-R6 | Prodleva mezi cykly měření nastavitelná v rozsahu 5 až 120 sekund | Hotovo | tests/test_agent.py |
-| UC4-R7 | Hodnoty z `information_schema` aktuální, ne z mezipaměti statistik MySQL 8 | Zbývá | |
-| UC4-R8 | Každý dotaz agenta vidí databázi v aktuálním stavu, ne snímek otevřené transakce | Zbývá | |
+| UC4-R7 | Hodnoty z `information_schema` aktuální, ne z mezipaměti statistik MySQL 8 | Hotovo | tests/test_collector.py |
+| UC4-R8 | Každý dotaz agenta vidí databázi v aktuálním stavu, ne snímek otevřené transakce | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
