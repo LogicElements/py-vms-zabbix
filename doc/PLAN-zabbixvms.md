@@ -430,3 +430,7 @@ session v cookie `sessionID` a dotaz bez ní odmítne zavřením spojení. HAR z
 neobsahoval. Verze 0.3.1 posílá session i v cookie, po zavřeném spojení se znovu přihlásí
 a adresy zkouší v pořadí IPv4 před IPv6: na serveru stálo každý dotaz na `localhost` 2 sekundy
 čekání na `::1`.
+
+**Ověření na serveru (verze 0.3.1, 2026-09-28):** agent se k IPP připojí a odesílá data do
+Zabbixu. Pro Hotovo u UC7-R2 zbývá potvrdit, že se `ups.charge` shoduje s nabitím ve webovém
+rozhraní IPP, a u UC7-R5, že se šablona naimportovala bez ruční úpravy souboru.
