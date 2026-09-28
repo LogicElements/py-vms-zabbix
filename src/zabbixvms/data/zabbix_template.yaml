@@ -165,3 +165,66 @@ zabbix_export:
         newvalue: Varování
       - value: '2'
         newvalue: Chyba
+  - uuid: 4af269e3ccbc4b0086d7c51ae3026371
+    template: VMS zabbix agent server
+    name: VMS zabbix agent server
+    description: Metriky serveru VMS odesílané agentem zabbixvms, společné všem turbínám na serveru.
+    groups:
+    - name: Templates/Applications
+    items:
+    - uuid: 019f1be946974f9691cbbdeb6a73497b
+      name: Nabití baterie UPS
+      type: TRAP
+      key: ups.charge
+      value_type: UNSIGNED
+      description: Nabití baterie UPS podle IPP; při více UPS nejnižší z nich
+      units: '%'
+      triggers:
+      - uuid: 44db902d8b3643baaf80702862fd7afb
+        expression: last(/VMS zabbix agent server/ups.charge)<{$VMS.UPS.CHARGE.MIN}
+        name: 'Chyba napájení: {ITEM.VALUE}'
+        priority: HIGH
+    - uuid: 5761a77d77924fd6a8ed5a11f13a1994
+      name: Stav agenta
+      type: TRAP
+      key: vms.agent_status
+      value_type: UNSIGNED
+      description: 0 = serverové metriky přečtené bez chyby, 1 = varování, 2 = chyba. Popis chyby nese
+        `vms.agent_error`.
+      valuemap:
+        name: Stav agenta
+      triggers:
+      - uuid: f398dfb734d441ff98e858b51b5020a5
+        expression: last(/VMS zabbix agent server/vms.agent_status)>0
+        name: Agent hlásí chybu nebo varování
+        priority: WARNING
+      - uuid: 09aa43759ffb428cba160b891d0f36be
+        expression: nodata(/VMS zabbix agent server/vms.agent_status,5m)=1
+        name: Z hostu nepřišla žádná hodnota 5m
+        priority: HIGH
+    - uuid: 7d148dd40da84569a88abf4bf9b2a7a9
+      name: Poslední chyba agenta
+      type: TRAP
+      key: vms.agent_error
+      value_type: CHAR
+      description: Text poslední chyby nebo varování při čtení serverových metrik; prázdný, když je vše
+        v pořádku.
+      triggers:
+      - uuid: 628a74ded23249c9a15d34c120e0f527
+        expression: length(last(/VMS zabbix agent server/vms.agent_error))>0
+        name: 'Chyba agenta: {ITEM.VALUE}'
+        priority: AVERAGE
+    macros:
+    - macro: '{$VMS.UPS.CHARGE.MIN}'
+      value: '50'
+      description: Nabití baterie v %, pod kterým se hlásí chyba napájení.
+    valuemaps:
+    - uuid: 8fbb6b58f24d433b9871b8fb18fa8414
+      name: Stav agenta
+      mappings:
+      - value: '0'
+        newvalue: Bez chyby
+      - value: '1'
+        newvalue: Varování
+      - value: '2'
+        newvalue: Chyba

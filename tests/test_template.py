@@ -1,5 +1,6 @@
-"""Tests of the Zabbix template: it holds exactly the metrics of the catalog, every
-item is a trapper, and the value map and the triggers are in it (UC3-R4, UC5-R4)."""
+"""Tests of the Zabbix templates: each holds exactly the metrics of its catalog, every
+item is a trapper, and the value map and the triggers are in it (UC3-R4, UC5-R4,
+UC7-R5, UC7-R6)."""
 
 import yaml
 
@@ -10,6 +11,7 @@ from zabbixvms.template import (
     EXPORT_VERSION,
     STATUS_MAPPINGS,
     STATUS_VALUE_MAP,
+    SERVER_TEMPLATE_NAME,
     TEMPLATE_GROUP,
     TEMPLATE_NAME,
     TRAPPER,
@@ -257,3 +259,125 @@ def test_the_shipped_template_carries_the_dependencies():
     for trigger in metrics.TRIGGERS:
         if trigger.blocked_by:
             assert shipped[trigger.name]["dependencies"][0]["name"] == trigger.blocked_by
+
+
+def server_template_of(export):
+    """The template of the server host, the second one of the export."""
+    return next(template for template in export["zabbix_export"]["templates"]
+                if template["template"] == SERVER_TEMPLATE_NAME)
+
+
+def server_triggers():
+    """Every trigger of the shipped server template, read from inside its items."""
+    return [trigger for item in server_template_of(exported())["items"]
+            for trigger in item.get("triggers", [])]
+
+
+def every_uuid(export):
+    """Every uuid of the export, wherever it sits."""
+    found = [group["uuid"] for group in export["zabbix_export"][groups_section()]]
+    for template in export["zabbix_export"]["templates"]:
+        found.append(template["uuid"])
+        for item in template["items"]:
+            found.append(item["uuid"])
+            found.extend(trigger["uuid"] for trigger in item.get("triggers", []))
+        found.extend(value_map["uuid"] for value_map in template["valuemaps"])
+    return found
+
+
+def test_the_export_holds_the_template_of_the_turbines_and_of_the_server():
+    """UC7-R5: a second template beside the one of the turbines, which stays first."""
+    names = [template["template"] for template in exported()["zabbix_export"]["templates"]]
+
+    assert names == [TEMPLATE_NAME, SERVER_TEMPLATE_NAME]
+    assert SERVER_TEMPLATE_NAME == "VMS zabbix agent server"
+
+
+def test_the_server_template_holds_exactly_the_metrics_of_its_catalog():
+    """UC7-R5: nothing extra and nothing missing against the table in UC7."""
+    items = server_template_of(exported())["items"]
+
+    assert [item["key"] for item in items] == list(metrics.SERVER_KEYS)
+    for item, metric in zip(items, metrics.SERVER_METRICS):
+        assert item["type"] == TRAPPER
+        assert item["name"] == metric.name
+        assert item["value_type"] == EXPORT_VALUE_TYPES[metric.value_type]
+        assert item.get("units", "") == metric.units
+        assert item["description"] == metric.description
+
+
+def test_the_server_template_brings_the_triggers_of_its_catalog():
+    """UC7-R5: every trigger of the table in UC7, each under the item it reads."""
+    template = server_template_of(exported())
+
+    assert sorted(trigger["name"] for trigger in server_triggers()) == \
+        sorted(trigger.name for trigger in metrics.SERVER_TRIGGERS)
+    for item in template["items"]:
+        for trigger in item.get("triggers", []):
+            assert f"/{SERVER_TEMPLATE_NAME}/{item['key']}" in trigger["expression"]
+            assert f"/{TEMPLATE_NAME}/" not in trigger["expression"]
+
+
+def test_the_power_fails_below_the_macro_of_the_server_template():
+    """UC7-R6: the expression reads the charge of this template against its macro."""
+    expressions = {trigger["name"]: trigger["expression"] for trigger in server_triggers()}
+
+    assert expressions["Chyba napájení: {ITEM.VALUE}"] == \
+        f"last(/{SERVER_TEMPLATE_NAME}/ups.charge)<{{$VMS.UPS.CHARGE.MIN}}"
+
+
+def test_the_server_template_declares_its_macro():
+    """UC7-R6: the limit of 50 % can be overridden on the host of the server."""
+    assert server_template_of(exported())["macros"] == [
+        {"macro": macro.name, "value": macro.value, "description": macro.description}
+        for macro in metrics.SERVER_MACROS
+    ]
+
+
+def test_the_server_template_maps_the_state_of_the_agent_to_text():
+    """UC7-R5: the same value map as the turbines have, in a template of its own."""
+    template = server_template_of(exported())
+    items = {item["key"]: item for item in template["items"]}
+
+    assert [(m["value"], m["newvalue"]) for m in template["valuemaps"][0]["mappings"]] == \
+        list(STATUS_MAPPINGS)
+    assert items["vms.agent_status"]["valuemap"] == {"name": STATUS_VALUE_MAP}
+
+
+def test_every_uuid_of_the_export_is_its_own():
+    """Both templates hold vms.agent_status and the same triggers on it; a uuid shared
+    between them would make the import take one object for the other."""
+    found = every_uuid(exported())
+
+    assert len(found) == len(set(found))
+
+
+def test_the_uuids_of_the_server_template_are_version_four_too():
+    import uuid as uuid_module
+
+    for value in every_uuid(exported()):
+        parsed = uuid_module.UUID(value)
+        assert parsed.version == 4
+        assert parsed.variant == uuid_module.RFC_4122
+
+
+def test_the_template_of_the_turbines_keeps_its_uuids():
+    """UC7-R5: the template of the turbines does not change, so a re-import of the new
+    file updates it in place instead of making its objects anew."""
+    template = template_of(exported())
+
+    for item in template["items"]:
+        assert item["uuid"] == stable_uuid(f"item:{item['key']}")
+        for trigger in item.get("triggers", []):
+            condition = next(t.condition for t in metrics.TRIGGERS if t.name == trigger["name"])
+            assert trigger["uuid"] == stable_uuid(f"trigger:{item['key']}:{condition}")
+    assert template["uuid"] == stable_uuid(f"template:{TEMPLATE_NAME}")
+    assert template["valuemaps"][0]["uuid"] == stable_uuid(f"valuemap:{STATUS_VALUE_MAP}")
+
+
+def test_the_template_of_the_turbines_knows_nothing_of_the_server():
+    """UC7-R5: the metrics, triggers and macro of the server stay out of it."""
+    template = template_of(exported())
+
+    assert "ups.charge" not in [item["key"] for item in template["items"]]
+    assert "{$VMS.UPS.CHARGE.MIN}" not in [macro["macro"] for macro in template["macros"]]
