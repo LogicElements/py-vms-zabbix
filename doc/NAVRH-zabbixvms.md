@@ -166,7 +166,10 @@ znovu nechalo čekat.
 
 IPP má vlastní certifikát podepsaný sám sebou a běží na tomtéž serveru, takže se certifikát
 neověřuje. Ze stejného důvodu jdou dotazy mimo proxy nastavenou pro stroj, ať už
-v proměnných prostředí nebo v registru. Jeden dotaz smí trvat nejvýš 10 sekund. Protože se
+v proměnných prostředí nebo v registru. Adresy se zkoušejí v pořadí IPv4 před IPv6. IPP
+poslouchá jen na `0.0.0.0`, kdežto Windows na serveru vrací pro `localhost` jako první `::1`.
+Odmítnuté spojení na `::1` trvá Windows 2 sekundy, a to se na serveru platilo u každého
+dotazu. Cyklus se čtyřmi dotazy tak trval 8 sekund. Jeden dotaz smí trvat nejvýš 10 sekund. Protože se
 agent k neodpovídajícímu IPP znovu nepřihlašuje, zdrží zaseknutý IPP cyklus turbín nejvýš
 o těchto 10 sekund.
 

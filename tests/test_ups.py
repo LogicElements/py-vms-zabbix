@@ -499,3 +499,49 @@ def test_the_charge_is_read_over_tls_behind_a_self_signed_certificate(ipp_over_t
     assert ipp_over_tls.url.startswith("https://")
 
     assert client_of(ipp_over_tls).charge() == 100
+
+
+def on_localhost(ipp):
+    """The address of the faked IPP by name: it listens on IPv4 only, like IPP 1.73 on
+    0.0.0.0."""
+    return ipp.url.replace("127.0.0.1", "localhost")
+
+
+@pytest.fixture
+def ipv6_first(monkeypatch):
+    """Resolve names the way the server did, with the IPv6 address first; this machine
+    may list 127.0.0.1 first, and then the wait for ::1 would not show."""
+    resolve = socket.getaddrinfo
+
+    def reordered(*args, **kwargs):
+        return sorted(resolve(*args, **kwargs), key=lambda info: info[0] != socket.AF_INET6)
+
+    monkeypatch.setattr(socket, "getaddrinfo", reordered)
+
+
+def test_the_server_order_is_what_the_tests_see(ipv6_first):
+    """The tests below are only meaningful with ::1 first."""
+    assert socket.getaddrinfo("localhost", 4680)[0][0] == socket.AF_INET6
+
+
+@pytest.mark.usefixtures("ipv6_first")
+def test_localhost_is_reached_over_ipv4_without_a_wait(ipp):
+    """UC7-R2: each request waited two seconds on the server for ::1 to be refused
+    before 127.0.0.1 was tried; one cycle of four requests took eight seconds."""
+    client = IppClient(UpsConfig(enabled=True, url=on_localhost(ipp), password=PASSWORD))
+
+    started = time.monotonic()
+    assert client.charge() == 100
+
+    assert time.monotonic() - started < 1
+
+
+@pytest.mark.usefixtures("ipv6_first")
+def test_localhost_is_reached_over_ipv4_with_tls_too(ipp_over_tls):
+    client = IppClient(UpsConfig(enabled=True, url=on_localhost(ipp_over_tls),
+                                 password=PASSWORD))
+
+    started = time.monotonic()
+    assert client.charge() == 100
+
+    assert time.monotonic() - started < 1

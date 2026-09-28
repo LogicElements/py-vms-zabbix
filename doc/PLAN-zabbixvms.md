@@ -423,3 +423,10 @@ v `libs/utils.js` IPP se se standardním shoduje jen pro ASCII, ověřeno spušt
 Script Host. Jak IPP odmítá vypršelou session, se zaznamenat nepodařilo, a tak se agent
 po jakémkoli selhání čtení nad starou session jednou znovu přihlásí; na serveru stojí za to
 v logu ověřit, že se po vypršení session nabití dál hlásí.
+
+**První nasazení na server (verze 0.3.0):** přihlášení k IPP prošlo, ale IPP zavřel spojení
+u každého `getNodeData`. Diagnostika na serveru ukázala, že IPP obslouží datové služby jen se
+session v cookie `sessionID` a dotaz bez ní odmítne zavřením spojení. HAR z Edge cookie
+neobsahoval. Verze 0.3.1 posílá session i v cookie, po zavřeném spojení se znovu přihlásí
+a adresy zkouší v pořadí IPv4 před IPv6: na serveru stálo každý dotaz na `localhost` 2 sekundy
+čekání na `::1`.

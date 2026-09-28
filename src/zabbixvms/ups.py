@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import http.client
 import json
+import socket
 import ssl
 import urllib.error
 import urllib.parse
@@ -66,6 +67,48 @@ def encode_password(password: str, challenge: str) -> str:
     return hmac.new(key, challenge.encode("ascii"), hashlib.sha1).hexdigest()
 
 
+def _connect_ipv4_first(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                        source_address=None) -> socket.socket:
+    """socket.create_connection() trying the IPv4 addresses of the name first.
+
+    IPP 1.73 listens on 0.0.0.0 only, and Windows on the server gives localhost as ::1
+    first. Being refused on ::1 takes Windows two seconds, which every request to IPP
+    paid before 127.0.0.1 was tried.
+    """
+    host, port = address
+    found = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    ordered = sorted(found, key=lambda info: info[0] != socket.AF_INET)
+    error = OSError(f"{host} has no address")
+    for *_, sockaddr in ordered:
+        try:
+            return socket.create_connection((sockaddr[0], port), timeout, source_address)
+        except OSError as err:
+            error = err
+    raise error
+
+
+class _HTTPConnection(http.client.HTTPConnection):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._create_connection = _connect_ipv4_first
+
+
+class _HTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._create_connection = _connect_ipv4_first
+
+
+class _HTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_HTTPConnection, req)
+
+
+class _HTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_HTTPSConnection, req, context=self._context)
+
+
 def _unverified_context() -> ssl.SSLContext:
     """TLS without checking the certificate: IPP serves a self-signed one of its own,
     and the connection never leaves the server."""
@@ -86,8 +129,8 @@ class IppClient:
         # IPP answers on the server itself; a proxy set for the machine, from the
         # environment or the registry, does not know it and must not be asked.
         self._opener = urllib.request.build_opener(
-            urllib.request.ProxyHandler({}),
-            urllib.request.HTTPSHandler(context=self.ssl_context))
+            urllib.request.ProxyHandler({}), _HTTPHandler(),
+            _HTTPSHandler(context=self.ssl_context))
 
     def charge(self) -> int:
         """Charge in % of the UPS that is worst off among those IPP manages.
