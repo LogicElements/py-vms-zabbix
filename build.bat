@@ -55,9 +55,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem offline\ is what servers without PyPI install from; it holds only the wheel that
+rem was built last, beside the dependencies, which change far less often.
+echo === Put the wheel into offline\ in place of the previous one
+if not exist "offline" mkdir "offline"
+del /q "offline\zabbixvms-*.whl" 2>nul
+copy /y "dist\zabbixvms-*.whl" "offline\" >nul
+if errorlevel 1 (
+    echo ERROR: The wheel could not be copied into offline\.
+    exit /b 1
+)
+
 if not defined PUBLISH (
     echo.
-    echo === Done. The packages are in dist\
+    echo === Done. The packages are in dist\, the wheel also in offline\
     echo === Run "build.bat upload" to publish them.
     exit /b 0
 )

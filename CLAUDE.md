@@ -24,8 +24,8 @@ přístupu k PyPI (viz [BUILD-balicku.md](doc/BUILD-balicku.md)):
 1. Spusť `build.bat`. Z Git Bashe ho `cmd //c build.bat` nenajde, spouštěj ho z PowerShellu
    celou cestou. Hlášení `NativeCommandError` v PowerShellu 5.1 je jen výstup na stderr,
    rozhoduje návratový kód.
-2. Z `offline` smaž předchozí `zabbixvms-*.whl` a zkopíruj tam nový wheel z `dist/`, aby ve
-   složce byla jen verze, která se má nasadit.
+2. `build.bat` sám smaže z `offline` předchozí `zabbixvms-*.whl` a zkopíruje tam nový wheel
+   z `dist/`. Zkontroluj, že je v `offline` jediný `zabbixvms-*.whl` a má novou verzi.
 3. Když se od minulého buildu změnily `dependencies` v `pyproject.toml`, stáhni do `offline`
    i závislosti podle kapitoly „Instalace na server bez přístupu k PyPI“ v BUILD-balicku.md.
 

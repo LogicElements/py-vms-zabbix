@@ -65,8 +65,10 @@ build.bat
 ```
 
 Skript spustí testy, smaže `dist/` i zbytky metadat v `src/*.egg-info` a sestaví sdist
-a wheel interpretem z `.venv`. **Nic nepublikuje.** Selžou-li testy nebo sestavení, skončí
-a nic dalšího neudělá.
+a wheel interpretem z `.venv`. Nový wheel pak zkopíruje do složky `offline` a předchozí
+`zabbixvms-*.whl` z ní smaže, takže je tam vždy jen poslední sestavená verze (viz instalace
+na server bez přístupu k PyPI níže). **Nic nepublikuje.** Selžou-li testy nebo sestavení,
+skončí a nic dalšího neudělá.
 
 Publikování je potřeba vyžádat zvlášť:
 
@@ -98,16 +100,17 @@ jako soubory. Postup má tři kroky: stáhnout, přenést, nainstalovat bez sít
 
 ### 1. Stáhnout balíčky na stroji s internetem
 
-Nejprve sestavte balíček (`build.bat`) a pak vedle něj stáhněte závislosti:
+Nejprve sestavte balíček (`build.bat`), který wheel agenta do složky `offline` rovnou
+zkopíruje, a pak vedle něj stáhněte závislosti:
 
 ```
 .venv\Scripts\python -m pip download . -d offline
-copy dist\zabbixvms-*.whl offline\
 ```
 
-`pip download .` stáhne **jen závislosti**, vlastní balíček ne – ten je potřeba do složky
-zkopírovat z `dist/`, jak dělá druhý řádek. Ve složce `offline` pak bude vedle
-instalačního skriptu šest wheelů, dohromady kolem 25 MB:
+`pip download .` stáhne **jen závislosti**, vlastní balíček ne – ten tam dal už
+`build.bat`. Závislosti stačí stáhnout jednou a znovu až při změně `dependencies`
+v `pyproject.toml`. Ve složce `offline` pak bude vedle instalačního skriptu šest wheelů,
+dohromady kolem 25 MB:
 
 ```
 install.ps1
@@ -127,7 +130,6 @@ závislosti se v tomhle režimu musí vyjmenovat, protože pip nesmí nic sestav
 .venv\Scripts\python -m pip download --only-binary=:all: --platform win_amd64 ^
     --python-version 3.12 -d offline ^
     mysql-connector-python jsonpickle zabbix_utils pywin32 PyYAML
-copy dist\zabbixvms-*.whl offline\
 ```
 
 Seznam závislostí odpovídá `dependencies` v `pyproject.toml`; při jeho změně upravte i tento
