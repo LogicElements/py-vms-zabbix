@@ -20,9 +20,9 @@
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření datové složky z kontextového menu ikony | Hotovo | tests/test_tray.py |
-| UC2-R9 | Chybějící položku doplní výchozí hodnota jen u položek z novějších verzí | Hotovo | tests/test_config.py |
+| UC2-R9 | Chybějící položku doplní výchozí hodnota jen u položek z novějších verzí | Zbývá | tests/test_config.py |
 | UC2-R10 | Zápis nových položek do konfigurace při aktualizaci instalačním skriptem | Hotovo | tests/test_config.py, tests/test_service.py |
-| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py |
+| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá | tests/test_metrics.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
 | UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Hotovo | tests/test_template.py |
@@ -43,6 +43,13 @@
 | UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R5 | Nová tabulka bez zápisu se první minutu nehlásí jako zastavený zápis | Hotovo | tests/test_collector.py |
+| UC7-R1 | Skupina `server` v konfiguraci: host serveru a čtení z IPP | Zbývá | |
+| UC7-R2 | Nabití baterie UPS z IPP odesílané jako `ups.charge` na host serveru | Zbývá | |
+| UC7-R3 | Nezjištěné nabití jako chyba na hostu serveru, bez `ups.charge` | Zbývá | |
+| UC7-R4 | Stav agenta na hostu serveru nezávislý na hostech turbín | Zbývá | |
+| UC7-R5 | Samostatná šablona pro host serveru | Zbývá | |
+| UC7-R6 | Chyba napájení při nabití pod mezí `{$VMS.UPS.CHARGE.MIN}` | Zbývá | |
+| UC7-R7 | Dokumentace nasazení sledování UPS a jeho chyb | Zbývá | N/A |
 
 ## Účel projektu
 
@@ -51,9 +58,9 @@ vibrací z nasbíraných dat a přenos vypočítaných hodnot na server TLCS. Kd
 přestane běžet nebo se dostane do nestandardního stavu, přenos dat se zastaví nebo začnou
 chybět hodnoty.
 
-Agent proto vystavuje stav těchto aplikací a stav turbíny v Zabbixu, kde už je zavedený dohled
-a alerting. Přínosem je včasný report o výpadku běhu softwaru nebo o nestandardním stavu, aby
-se dal řešit hned.
+Agent proto vystavuje stav těchto aplikací, stav turbíny a napájení serveru v Zabbixu, kde už
+je zavedený dohled a alerting. Přínosem je včasný report o výpadku běhu softwaru nebo
+o nestandardním stavu, aby se dal řešit hned.
 
 ## UC1 – Nepřetržitý provoz agenta na serveru
 
@@ -200,7 +207,7 @@ nastavit.
 ### UC2-R9
 **Popis:** Položka, která v konfiguraci chybí, se doplní výchozí hodnotou jen tehdy, když přibyla v novější verzi agenta.
 **DoD:**
-- Položky přidané po první verzi agenta, tedy `period` ve skupině odesílání do Zabbixu a `raw_prefixes` u turbíny, se při načtení konfigurace, která je nemá, doplní hodnotou, se kterou agent pracuje stejně jako verze, která je neznala: 5 sekund a prázdný seznam.
+- Položky přidané po první verzi agenta, tedy `period` ve skupině odesílání do Zabbixu, `raw_prefixes` u turbíny a skupina `server` (UC7-R1), se při načtení konfigurace, která je nemá, doplní hodnotou, se kterou agent pracuje stejně jako verze, která je neznala: 5 sekund, prázdný seznam a skupina `server` s vypnutým sledováním UPS.
 - Konfiguraci, ve které chybí jiná položka, například `system_id` turbíny nebo `location`, agent odmítne jako neplatnou a v chybě uvede, která položka chybí.
 - Doplnění probíhá jen v paměti, soubor konfigurace se jím nezmění (UC2-R4).
 
@@ -242,8 +249,8 @@ Sada metrik odesílaných do Zabbixu:
 ### UC3-R1
 **Popis:** Sada metrik, které agent odesílá do Zabbixu, je vedená jako tabulka v této PRS.
 **DoD:**
-- Tabulka uvádí každou metriku, kterou agent odesílá.
-- Agent neodesílá žádnou metriku, která v tabulce není.
+- Tabulka výše uvádí každou metriku, kterou agent odesílá na hosty turbín; metriky hostu serveru uvádí tabulka v UC7.
+- Agent neodesílá žádnou metriku, která v příslušné tabulce není.
 
 ### UC3-R2
 **Popis:** Tabulka metrik obsahuje sloupce potřebné k založení odpovídající položky v Zabbixu.
@@ -498,3 +505,97 @@ turbíny nepozná výpadek TVMS.
 - Od uplynutí 1 minuty od založení se tabulka bez `UPDATE_TIME` hlásí podle UC6-R4 jako jeden měsíc.
 - Tabulka, do které se už zapsalo, má stáří zápisu podle `UPDATE_TIME` bez ohledu na to, kdy vznikla.
 - Minuta se počítá od `CREATE_TIME`, ne od data v názvu tabulky.
+
+## UC7 – Sledování napájení serveru z UPS
+
+Aktérem je ten, kdo dohlíží na provoz serveru VMS. Cílem je poznat včas, že server běží
+z baterie UPS a hrozí jeho vypnutí. Spouštěčem je každý cyklus měření.
+
+Servery napájí UPS Eaton, kterou spravuje Eaton Intelligent Power Protector (IPP). UPS je
+k IPP připojená přes USB nebo po síti; IPP obě připojení vystavuje stejně ve svém webovém
+rozhraní na serveru. Agent se k tomuto rozhraní přihlásí stejně jako prohlížeč, přečte
+nabití baterie a odešle ho na host serveru. Host serveru nese metriky společné celému
+serveru, ne jedné turbíně; UPS je první z nich a další mohou přibýt vedle ní.
+
+Sada metrik odesílaných na host serveru:
+
+| Klíč | Název | Typ hodnoty | Jednotka | Popis |
+| --- | --- | --- | --- | --- |
+| `ups.charge` | Nabití baterie UPS | Numeric (unsigned) | % | Nabití baterie UPS podle IPP; při více UPS nejnižší z nich |
+| `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = serverové metriky přečtené bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`. |
+| `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování při čtení serverových metrik; prázdný, když je vše v pořádku. |
+
+| Klíč metriky | Zdroj | Pole zdroje | Výpočet |
+| --- | --- | --- | --- |
+| `ups.charge` | IPP, `data_srv.js?action=loadNodeData` | `UPS.PowerSummary.RemainingCapacity` | nejnižší hodnota přes uzly UPS v IPP |
+
+Sada triggerů šablony serveru:
+
+| Název triggeru | Klíč metriky | Podmínka | Priorita |
+| --- | --- | --- | --- |
+| Chyba napájení: {ITEM.VALUE} | `ups.charge` | `last({METRIC})<{$VMS.UPS.CHARGE.MIN}` | HIGH |
+| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | WARNING |
+| Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH |
+| Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE |
+
+Makra šablony serveru:
+
+| Makro | Výchozí hodnota | Význam |
+| --- | --- | --- |
+| `{$VMS.UPS.CHARGE.MIN}` | 50 | Nabití baterie v %, pod kterým se hlásí chyba napájení |
+
+### UC7-R1
+**Popis:** Konfigurace obsahuje skupinu `server` s názvem hostu serveru a s podskupinou `ups` pro čtení z IPP.
+**DoD:**
+- Skupina `server` obsahuje `host` – celý název hostu serveru v Zabbixu; neskládá se z `location` a nastavuje se nezávisle na něm.
+- Podskupina `ups` obsahuje `enabled`, adresu webového rozhraní IPP `url` s výchozí hodnotou `https://localhost:4680`, uživatelské jméno `login` a heslo `password` v otevřené podobě.
+- Při `enabled: false` agent IPP nečte a na host serveru nic neodesílá.
+- Konfiguraci se zapnutým sledováním UPS a prázdným `host` agent odmítne jako neplatnou.
+- Chybějící skupina `server` se doplní podle UC2-R9 s prázdným `host` a vypnutým sledováním UPS, takže konfigurace starší verze zůstává platná a pracuje beze změny.
+
+### UC7-R2
+**Popis:** Agent v každém cyklu přečte z IPP nabití baterie UPS a odešle ho jako `ups.charge` na host serveru.
+**DoD:**
+- Agent se k IPP na adrese z konfigurace přihlásí stejně jako jeho webové rozhraní: vyžádá si výzvu `user_srv.js?action=queryLoginChallenge` a odešle `loginUser` s heslem ve tvaru HMAC-SHA1, jehož klíčem je SHA1 hesla v šestnáctkovém zápisu a zprávou výzva.
+- Certifikát IPP agent neověřuje, protože IPP používá vlastní self-signed certifikát.
+- Získané `sessionID` agent používá i v dalších cyklech; přihlásí se znovu, až když ho IPP odmítne, a to ještě v tomtéž cyklu.
+- Uzly UPS jsou uzly IPP, jejichž `System.Tag` obsahuje `UPS`; `ups.charge` je nejnižší `UPS.PowerSummary.RemainingCapacity` z nich.
+- Čtení UPS probíhá v každém cyklu měření, tedy se stejnou prodlevou jako čtení turbín (UC4-R6).
+- Na serveru s IPP 1.73 a UPS připojenou přes USB se hodnota `ups.charge` v Zabbixu shoduje s nabitím, které ukazuje webové rozhraní IPP.
+
+### UC7-R3
+**Popis:** Když agent nabití z IPP nezjistí, ohlásí na hostu serveru chybu a `ups.charge` neodešle.
+**DoD:**
+- Chybou je nedostupné rozhraní IPP, odmítnuté přihlášení, odpověď v neočekávaném tvaru, IPP bez uzlu UPS a uzel UPS s `System.CommunicationLost` rovným 1.
+- Při chybě odešle agent na host serveru `vms.agent_status` 2 a `vms.agent_error` s popisem chyby podle UC5-R3; `ups.charge` v tomto cyklu neodešle.
+- Chyba se zapíše do logovacího souboru podle UC5-R1.
+- Po odstranění příčiny začne agent v nejbližším cyklu `ups.charge` znovu odesílat bez restartu služby.
+
+### UC7-R4
+**Popis:** Stav agenta hlásí host serveru nezávisle na hostech turbín.
+**DoD:**
+- `vms.agent_status` a `vms.agent_error` hostu serveru popisují jen čtení serverových metrik; hosty turbín popisují dál jen čtení z databáze podle UC5-R3.
+- Chyba při čtení z IPP nezmění stav hlášený na hosty turbín a nezastaví odesílání jejich metrik.
+- Nedostupná databáze nezmění stav hlášený na host serveru a nezastaví odesílání `ups.charge`.
+- Nedostupnost Zabbix serveru se na host serveru nehlásí, stejně jako u turbín podle UC5-R3.
+
+### UC7-R5
+**Popis:** Balíček obsahuje samostatnou šablonu pro host serveru podle tabulek tohoto use casu.
+**DoD:**
+- Soubor šablony z UC3-R4 obsahuje vedle šablony turbín druhou šablonu „VMS zabbix agent server", která se naimportuje bez ruční úpravy souboru.
+- Šablona serveru obsahuje právě metriky, triggery a makra z tabulek tohoto use casu, se stejnými pravidly jako v UC3-R4 a UC5-R4.
+- Šablona turbín se přidáním šablony serveru nemění.
+
+### UC7-R6
+**Popis:** Šablona serveru hlásí chybu napájení, když nabití baterie klesne pod mez danou makrem.
+**DoD:**
+- Trigger Chyba napájení přejde do problémového stavu, když je poslední `ups.charge` menší než `{$VMS.UPS.CHARGE.MIN}`, tedy ve výchozím stavu pod 50 %.
+- Nabití rovné mezi problém nehlásí.
+- Makro jde přepsat na hostu serveru.
+
+### UC7-R7
+**Popis:** Dokumentace popisuje nasazení sledování UPS a chyby, které při něm agent hlásí.
+**DoD:**
+- Návod k nastavení Zabbixu popisuje založení hostu serveru, přiřazení šablony serveru a mez nabití `{$VMS.UPS.CHARGE.MIN}`.
+- Návod popisuje, co obsluha nastaví ve skupině `server` konfigurace, aby agent začal UPS sledovat.
+- Popis chyb agenta uvádí chyby podle UC7-R3 a kde k nim hledat podrobnosti.
