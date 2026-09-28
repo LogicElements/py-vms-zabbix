@@ -7,6 +7,7 @@ tests/data/ipp. The login answers were not recorded; their shape is what the pag
 user_settings.js reads out of them, and matches the lengths IPP reported for them.
 """
 
+import contextlib
 import copy
 import json
 import socket
@@ -25,6 +26,13 @@ from zabbixvms.ups import IppClient, IppError, encode_password
 DATA = Path(__file__).resolve().parent / "data" / "ipp"
 NODE_ID = "GA10R14030"
 PASSWORD = "Vms2015"
+
+# A self-signed certificate for CN=localhost with its key, made for these tests only,
+# the way IPP serves one of its own.
+TEST_CERTIFICATE = DATA / "self-signed-test-only.pem"
+
+# What FakeIpp.broken holds for a request whose connection is closed without an answer.
+DROP = object()
 
 
 def recorded(action):
@@ -94,10 +102,10 @@ class FakeIpp:
         raise AssertionError(f"the agent has no business calling {action}")
 
 
-@pytest.fixture
-def ipp():
-    """A faked IPP listening on a free port of this machine."""
-    fake = FakeIpp()
+@contextlib.contextmanager
+def serve(fake, tls=False):
+    """Serve the faked IPP on a free port of this machine, over TLS if asked, while
+    the block runs."""
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
@@ -108,6 +116,9 @@ def ipp():
             form["_service"] = path
             time.sleep(fake.delay)
             answer = fake.answer(action, form)
+            if answer is DROP:
+                self.close_connection = True
+                return
             if isinstance(answer, int):
                 self.send_error(answer)
                 return
@@ -122,14 +133,38 @@ def ipp():
             pass
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    scheme = "http"
+    if tls:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(TEST_CERTIFICATE)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        scheme = "https"
     # A short poll keeps the shutdown after each test from waiting half a second.
     thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02},
                               daemon=True)
     thread.start()
-    fake.url = f"http://127.0.0.1:{server.server_address[1]}"
-    yield fake
-    server.shutdown()
-    server.server_close()
+    fake.url = f"{scheme}://127.0.0.1:{server.server_address[1]}"
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture
+def ipp():
+    """A faked IPP listening on a free port of this machine."""
+    fake = FakeIpp()
+    with serve(fake):
+        yield fake
+
+
+@pytest.fixture
+def ipp_over_tls():
+    """The faked IPP behind a self-signed certificate, as IPP serves itself."""
+    fake = FakeIpp()
+    with serve(fake, tls=True):
+        yield fake
 
 
 def client_of(ipp, password=PASSWORD, **kwargs):
@@ -258,7 +293,8 @@ def test_an_ipp_that_is_not_there_is_an_error():
 
 
 def test_an_ipp_that_does_not_answer_in_time_is_an_error(ipp):
-    """UC7-R3: a hanging IPP must not hold up the cycle of the turbines."""
+    """UC7-R3: a hanging IPP holds up the cycle of the turbines no longer than the
+    timeout of one request."""
     ipp.delay = 1
 
     with pytest.raises(IppError):
@@ -347,3 +383,52 @@ def test_the_certificate_of_ipp_is_not_checked():
 
     assert context.verify_mode == ssl.CERT_NONE
     assert context.check_hostname is False
+
+
+def test_an_ipp_that_stops_answering_is_not_logged_into_again(ipp):
+    """UC7-R3: when IPP cannot be reached, a new login would only fail the same way
+    and hold up the cycle of the turbines a second time."""
+    client = client_of(ipp)
+    client.charge()
+    ipp.broken["getNodeData"] = DROP
+    ipp.broken["queryLoginChallenge"] = DROP
+
+    with pytest.raises(IppError, match="cannot be reached"):
+        client.charge()
+
+    assert [action for action, _ in ipp.requests[4:]] == ["getNodeData"]
+
+
+def test_the_session_survives_an_ipp_that_was_away(ipp):
+    """UC7-R2: once IPP answers again, the kept session is used without a new login."""
+    client = client_of(ipp)
+    client.charge()
+    ipp.broken["getNodeData"] = DROP
+    with pytest.raises(IppError):
+        client.charge()
+
+    del ipp.broken["getNodeData"]
+
+    assert client.charge() == 100
+    assert len(ipp.logins()) == 1
+
+
+def test_a_proxy_of_the_system_is_not_used(ipp, monkeypatch):
+    """UC7-R2: IPP answers on the server itself; a proxy set for the machine, which
+    would not know localhost, must not stand between them."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+        monkeypatch.setenv(name, f"http://127.0.0.1:{port}")
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+
+    assert client_of(ipp, timeout=0.5).charge() == 100
+
+
+def test_the_charge_is_read_over_tls_behind_a_self_signed_certificate(ipp_over_tls):
+    """UC7-R2: IPP serves HTTPS with a certificate of its own, which is not checked."""
+    assert ipp_over_tls.url.startswith("https://")
+
+    assert client_of(ipp_over_tls).charge() == 100

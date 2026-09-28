@@ -152,11 +152,15 @@ se nemění, je prázdný.
 
 Session se drží mezi cykly. Jak IPP odmítá vypršelou session, se zaznamenat nepodařilo,
 a proto každé selhání čtení nad starou session vede k jednomu novému přihlášení a opakování
-čtení ve stejném cyklu. Výjimkou je `System.CommunicationLost`: tehdy IPP s UPS ztratil
-spojení a session za to nemůže.
+čtení ve stejném cyklu. Výjimky jsou dvě. Při `System.CommunicationLost` ztratil IPP spojení
+s UPS a session za to nemůže. IPP, který vůbec neodpovídá, by nové přihlášení jen znovu
+nechalo čekat.
 
 IPP má vlastní certifikát podepsaný sám sebou a běží na tomtéž serveru, takže se certifikát
-neověřuje. Jeden dotaz smí trvat 10 sekund, aby zaseknutý IPP nezdržel cyklus turbín.
+neověřuje. Ze stejného důvodu jdou dotazy mimo proxy nastavenou pro stroj, ať už
+v proměnných prostředí nebo v registru. Jeden dotaz smí trvat nejvýš 10 sekund. Protože se
+agent k neodpovídajícímu IPP znovu nepřihlašuje, zdrží zaseknutý IPP cyklus turbín nejvýš
+o těchto 10 sekund.
 
 Testy běží proti falešnému IPP. Odpovědi datových služeb jsou ty, které IPP 1.73 poslal
 prohlížeči, uložené v `tests/data/ipp`. Odpovědi přihlášení zaznamenané nejsou, jejich tvar

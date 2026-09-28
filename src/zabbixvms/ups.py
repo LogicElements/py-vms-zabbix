@@ -51,6 +51,10 @@ class CommunicationLost(IppError):
     """IPP answers, but it lost the UPS; the session is not what is wrong."""
 
 
+class IppUnreachable(IppError):
+    """No answer came from IPP at all; a new login would get none either."""
+
+
 def encode_password(password: str, challenge: str) -> str:
     """The password as loginUser takes it, the way user_settings.js of IPP builds it.
 
@@ -79,19 +83,25 @@ class IppClient:
         self._timeout = timeout
         self._session: str | None = None
         self.ssl_context = _unverified_context()
+        # IPP answers on the server itself; a proxy set for the machine, from the
+        # environment or the registry, does not know it and must not be asked.
+        self._opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}),
+            urllib.request.HTTPSHandler(context=self.ssl_context))
 
     def charge(self) -> int:
         """Charge in % of the UPS that is worst off among those IPP manages.
 
         The session of an earlier cycle is used as long as IPP takes it. How IPP turns
-        down a session that expired is not known, so any failed read on a kept session
+        down a session that expired is not known, so a failed read on a kept session
         is answered by one new login and the read once more; what fails after that is
-        reported. A UPS IPP lost is no reason to log in again.
+        reported. A UPS IPP lost is no reason to log in again, and neither is an IPP
+        that does not answer at all: the login would only wait for it a second time.
         """
         if self._session is not None:
             try:
                 return self._read_charge()
-            except CommunicationLost:
+            except (CommunicationLost, IppUnreachable):
                 raise
             except IppError:
                 self._session = None
@@ -152,14 +162,14 @@ class IppClient:
             url, data=urllib.parse.urlencode(fields).encode("ascii"),
             headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout,
-                                        context=self.ssl_context) as response:
+            with self._opener.open(request, timeout=self._timeout) as response:
                 body = response.read()
         except urllib.error.HTTPError as err:
             raise IppError(f"IPP answered {action} with HTTP {err.code}") from err
         except (urllib.error.URLError, OSError, http.client.HTTPException) as err:
             reason = getattr(err, "reason", err)
-            raise IppError(f"IPP at {self._ups.url} cannot be reached: {reason}") from err
+            raise IppUnreachable(
+                f"IPP at {self._ups.url} cannot be reached: {reason}") from err
         try:
             answer = json.loads(body.decode("utf-8"))
         except ValueError as err:

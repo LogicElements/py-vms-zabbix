@@ -78,7 +78,8 @@ neodešle. Jakmile příčina zmizí, nabití v dalším cyklu zase přijde, bez
   z konfigurace.
 
 Kvůli vypršelé session se agent k IPP jednou za cyklus přihlásí znovu a čtení zopakuje.
-Chyba se hlásí, teprve když selže i to.
+Chyba se hlásí, teprve když selže i to. Výjimkou je IPP, který vůbec neodpovídá: nové
+přihlášení by jen znovu čekalo, a proto se `cannot be reached` hlásí hned.
 
 ## Stav 1 — varování
 
