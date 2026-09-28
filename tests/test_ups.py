@@ -9,6 +9,7 @@ user_settings.js reads out of them, and matches the lengths IPP reported for the
 
 import contextlib
 import copy
+import http.cookies
 import json
 import socket
 import ssl
@@ -31,7 +32,8 @@ PASSWORD = "Vms2015"
 # the way IPP serves one of its own.
 TEST_CERTIFICATE = DATA / "self-signed-test-only.pem"
 
-# What FakeIpp.broken holds for a request whose connection is closed without an answer.
+# An answer that is none: the connection is closed without a byte, the way IPP turns
+# down a request it will not serve.
 DROP = object()
 
 
@@ -49,10 +51,13 @@ class FakeIpp:
         self.requests = []
         self.node_list = recorded("getNodeData")
         self.node_data = recorded("loadNodeData")
-        # What a data service answers to a session it does not know; how IPP really
-        # answers is not recorded, so the quietest plausible answer is the default.
-        self.stale_answer = {"data": [], "nodeData": {}}
+        # What a data service answers to a session it does not know. On the server IPP
+        # closed the connection of a data request without the session in a cookie;
+        # that it treats an expired session alike is likely but not recorded.
+        self.stale_answer = DROP
         self.broken = {}
+        # Actions that hang, as an IPP that stopped answering does.
+        self.hang = set()
         self.delay = 0
 
     def add_ups(self, node_id, charge, tag="DEV,UPS,SDN,PWS"):
@@ -88,8 +93,12 @@ class FakeIpp:
                 return json.dumps({"success": True, "sessionID": session, "maxAge": 900,
                                    "passwordMustBeChanged": False})
             return json.dumps({"success": False})
-        if form.get("sessionID") not in self.sessions:
-            if isinstance(self.stale_answer, int):
+        # IPP 1.73 on the server served a data request only with the session in the
+        # cookie sessionID; the page sends it in the form as well.
+        if form.get("_cookie") is None:
+            return DROP
+        if form.get("_cookie") not in self.sessions or form.get("sessionID") not in self.sessions:
+            if self.stale_answer is DROP or isinstance(self.stale_answer, int):
                 return self.stale_answer
             return json.dumps(self.stale_answer)
         if action == "getNodeData":
@@ -114,6 +123,13 @@ def serve(fake, tls=False):
             length = int(self.headers["Content-Length"])
             form = dict(urllib.parse.parse_qsl(self.rfile.read(length).decode("utf-8")))
             form["_service"] = path
+            cookie = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
+            form["_cookie"] = cookie["sessionID"].value if "sessionID" in cookie else None
+            if action in fake.hang:
+                fake.requests.append((action, form))
+                time.sleep(1)
+                self.close_connection = True
+                return
             time.sleep(fake.delay)
             answer = fake.answer(action, form)
             if answer is DROP:
@@ -386,12 +402,11 @@ def test_the_certificate_of_ipp_is_not_checked():
 
 
 def test_an_ipp_that_stops_answering_is_not_logged_into_again(ipp):
-    """UC7-R3: when IPP cannot be reached, a new login would only fail the same way
+    """UC7-R3: when IPP does not answer, a new login would only wait the same way
     and hold up the cycle of the turbines a second time."""
-    client = client_of(ipp)
+    client = client_of(ipp, timeout=0.2)
     client.charge()
-    ipp.broken["getNodeData"] = DROP
-    ipp.broken["queryLoginChallenge"] = DROP
+    ipp.hang = {"getNodeData", "queryLoginChallenge"}
 
     with pytest.raises(IppError, match="cannot be reached"):
         client.charge()
@@ -401,16 +416,68 @@ def test_an_ipp_that_stops_answering_is_not_logged_into_again(ipp):
 
 def test_the_session_survives_an_ipp_that_was_away(ipp):
     """UC7-R2: once IPP answers again, the kept session is used without a new login."""
-    client = client_of(ipp)
+    client = client_of(ipp, timeout=0.2)
     client.charge()
-    ipp.broken["getNodeData"] = DROP
+    ipp.hang = {"getNodeData"}
     with pytest.raises(IppError):
         client.charge()
 
-    del ipp.broken["getNodeData"]
+    ipp.hang = set()
 
     assert client.charge() == 100
     assert len(ipp.logins()) == 1
+
+
+def test_the_session_goes_in_a_cookie_as_well(ipp):
+    """UC7-R2: IPP 1.73 on the server closed the connection of every data request
+    that carried the session only in the form."""
+    client_of(ipp).charge()
+
+    reads = [form for action, form in ipp.requests
+             if action in ("getNodeData", "loadNodeData")]
+    assert len(reads) == 2
+    assert all(form["_cookie"] == form["sessionID"] and form["_cookie"] in ipp.sessions
+               for form in reads)
+
+
+def test_the_login_goes_without_a_cookie(ipp):
+    """UC7-R2: the login is what gives the session; it worked on the server without."""
+    client_of(ipp).charge()
+
+    logins = [form for action, form in ipp.requests
+              if action in ("queryLoginChallenge", "loginUser")]
+    assert [form["_cookie"] for form in logins] == [None, None]
+
+
+def test_a_request_ipp_closes_unanswered_on_a_kept_session_logs_in_again(ipp):
+    """UC7-R2: a closed connection after the request got there is IPP turning down the
+    session, not an IPP that is away, so one new login follows in the same cycle."""
+    client = client_of(ipp)
+    client.charge()
+    ipp.expire_sessions()
+    assert ipp.stale_answer is DROP
+
+    assert client.charge() == 100
+    assert len(ipp.logins()) == 2
+
+
+def test_a_session_turned_down_with_an_empty_answer_is_replaced_too(ipp):
+    """UC7-R2: however else IPP says no to the session, one new login follows."""
+    client = client_of(ipp)
+    client.charge()
+    ipp.expire_sessions()
+    ipp.stale_answer = {"data": [], "nodeData": {}}
+
+    assert client.charge() == 100
+    assert len(ipp.logins()) == 2
+
+
+def test_a_request_ipp_closes_unanswered_says_so(ipp):
+    """UC7-R3: the text tells an IPP that turned a request down from one that is away."""
+    ipp.broken["loadNodeData"] = DROP
+
+    with pytest.raises(IppError, match="closed the connection without answering loadNodeData"):
+        client_of(ipp).charge()
 
 
 def test_a_proxy_of_the_system_is_not_used(ipp, monkeypatch):

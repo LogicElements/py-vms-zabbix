@@ -158,14 +158,23 @@ class IppClient:
         url = f"{self._ups.url.rstrip('/')}/server/{service}?action={action}"
         fields = dict(form or {})
         fields["sessionID"] = self._session if self._session is not None else NO_SESSION
+        headers = {"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"}
+        if self._session is not None:
+            # IPP 1.73 serves the data services only with the session in the cookie the
+            # page sets after the login; the form field alone gets the connection closed.
+            headers["Cookie"] = f"sessionID={self._session}"
         request = urllib.request.Request(
-            url, data=urllib.parse.urlencode(fields).encode("ascii"),
-            headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
+            url, data=urllib.parse.urlencode(fields).encode("ascii"), headers=headers)
         try:
             with self._opener.open(request, timeout=self._timeout) as response:
                 body = response.read()
         except urllib.error.HTTPError as err:
             raise IppError(f"IPP answered {action} with HTTP {err.code}") from err
+        except http.client.RemoteDisconnected as err:
+            # The request got there and IPP closed the connection instead of answering,
+            # which is how it turns down a request without a session it knows. It is not
+            # an IPP that is away, so a new login may well help.
+            raise IppError(f"IPP closed the connection without answering {action}") from err
         except (urllib.error.URLError, OSError, http.client.HTTPException) as err:
             reason = getattr(err, "reason", err)
             raise IppUnreachable(

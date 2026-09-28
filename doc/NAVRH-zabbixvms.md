@@ -150,11 +150,19 @@ Za UPS se považuje uzel, který má mezi tagy `UPS`. Nabitím je
 tom nejhůř. `loadNodeMeasures` se nepoužívá, protože vrací jen historii změn a u nabití, které
 se nemění, je prázdný.
 
-Session se drží mezi cykly. Jak IPP odmítá vypršelou session, se zaznamenat nepodařilo,
-a proto každé selhání čtení nad starou session vede k jednomu novému přihlášení a opakování
-čtení ve stejném cyklu. Výjimky jsou dvě. Při `System.CommunicationLost` ztratil IPP spojení
-s UPS a session za to nemůže. IPP, který vůbec neodpovídá, by nové přihlášení jen znovu
-nechalo čekat.
+Po přihlášení se `sessionID` posílá ve formuláři i v cookie `sessionID`, stejně jako to dělá
+stránka. Bez cookie IPP datové služby neobslouží a zavře spojení, aniž by odpověděl. Tak se
+to projevilo na serveru: přihlášení prošlo a hned první `getNodeData` skončil hláškou
+`Remote end closed connection without response`. HAR z Edge cookie nezachytil, protože je
+novější Edge při exportu vynechává.
+
+Session se drží mezi cykly. Zavřené spojení bez odpovědi je způsob, jakým IPP odmítá dotaz
+bez platné session. Vypršelou session nejspíš odmítá stejně, zaznamenat se to ale nepodařilo.
+Proto každé selhání čtení nad starou session vede k jednomu novému přihlášení a opakování
+čtení ve stejném cyklu, i když IPP spojení jen zavřel. Výjimky jsou dvě. Při
+`System.CommunicationLost` ztratil IPP spojení s UPS a session za to nemůže. IPP, který
+vůbec neodpovídá, tedy odmítne spojení nebo nestihne odpovědět včas, by nové přihlášení jen
+znovu nechalo čekat.
 
 IPP má vlastní certifikát podepsaný sám sebou a běží na tomtéž serveru, takže se certifikát
 neověřuje. Ze stejného důvodu jdou dotazy mimo proxy nastavenou pro stroj, ať už

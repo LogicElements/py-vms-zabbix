@@ -69,6 +69,11 @@ neodešle. Jakmile příčina zmizí, nabití v dalším cyklu zase přijde, bez
   IPP o UPS ví, ale ztratil s ní spojení, například kvůli odpojenému kabelu USB nebo
   výpadku síťové karty UPS. Za UPS je její sériové číslo z IPP. Nabití, které IPP drží,
   je poslední známé, ne aktuální, proto se neposílá.
+- `IPP closed the connection without answering getNodeData`
+  IPP dotaz přijal, ale místo odpovědi spojení zavřel. Tak odmítá dotaz bez platné session.
+  Agent se kvůli tomu hned jednou přihlásí znovu, takže se tahle chyba ukáže, jen když
+  IPP dotaz odmítne i po novém přihlášení. Pak jde nejspíš o jinou verzi IPP, která chce
+  session předávat jinak.
 - `IPP answered getNodeData with HTTP 500`, `IPP answered loadNodeData with something else
   than JSON`, `IPP gave UPS ... no number in UPS.PowerSummary.RemainingCapacity` a podobné
   IPP odpověděl jinak, než jak odpovídá verze 1.73, podle které agent vznikl. Nejčastěji
@@ -77,7 +82,8 @@ neodešle. Jakmile příčina zmizí, nabití v dalším cyklu zase přijde, bez
   Host serveru toho jména v Zabbixu není. Jméno musí přesně odpovídat `server.host`
   z konfigurace.
 
-Kvůli vypršelé session se agent k IPP jednou za cyklus přihlásí znovu a čtení zopakuje.
+Kvůli vypršelé nebo odmítnuté session se agent k IPP jednou za cyklus přihlásí znovu
+a čtení zopakuje.
 Chyba se hlásí, teprve když selže i to. Výjimkou je IPP, který vůbec neodpovídá: nové
 přihlášení by jen znovu čekalo, a proto se `cannot be reached` hlásí hned.
 
