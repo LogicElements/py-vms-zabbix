@@ -12,6 +12,7 @@
 - Python 3.12 a novější, pouze Windows
 - setuptools, zdroje v `src/`, struktura modulů podle [návrhu](NAVRH-zabbixvms.md)
 - závislosti: `mysql-connector-python`, `jsonpickle`, `zabbix_utils`, `pywin32`, `PyYAML`
+- čtení z Eaton IPP přes `urllib` ze standardní knihovny, bez další závislosti
 - testy: `pytest`; výpočty a konfigurace proti podvrženým objektům, databázové dotazy proti testovací databázi `BVMS`
 - služba a ikona v systray se ověřují ručně (`sc.exe query`, restart serveru, pohled na ikonu)
 
@@ -31,6 +32,7 @@
 | 10 | Aktuální statistiky z information_schema | [x] |
 | 11 | Připojení bez otevřené transakce | [x] |
 | 12 | Nová tabulka surových dat bez zápisu | [x] |
+| 13 | Sledování UPS serveru | [ ] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -388,3 +390,27 @@ DoD vracel na Zbývá. Proti lokální MySQL 5.7 se potvrdilo, že právě zalo�
 má `UPDATE_TIME` NULL a `CREATE_TIME` vyplněný: dřív z toho bylo stáří zápisu jeden měsíc,
 teď 0 s. Ruční krok 7 prošel: první přepnutí tabulek surových dat s verzí 0.2.4 se na
 serveru obešlo bez Chyby zápisu surových dat.
+
+### Etapa 13 – Sledování UPS serveru
+**Účel:** Odesílat nabití baterie UPS z Eaton IPP na host serveru a hlásit chybu napájení.
+**Řeší:** UC2-R9, UC3-R1, UC7-R1, UC7-R2, UC7-R3, UC7-R4, UC7-R5, UC7-R6, UC7-R7
+**Kroky:**
+1. Přidat do `config.py` třídy `ServerConfig` (`host`, `ups`) a `UpsConfig` (`enabled`, `url`, `login`, `password`) a člen `server` do `Config`.
+2. Kontrolovat v `Config.validate()`, že zapnuté sledování UPS má neprázdný `host`.
+3. Zařadit skupinu `server` mezi položky z novější verze, doplňovanou s prázdným `host` a `enabled: false`; doplnit ji do `data/config_default.json`.
+4. Napsat testy konfigurace: načtení bez skupiny `server`, odmítnutí zapnutého UPS bez `host`, doplnění skupiny přes `complete-config`, uložení a načtení se shodnými hodnotami.
+5. Vytvořit `ups.py` s třídou `IppClient`: přihlášení přes `queryLoginChallenge` a `loginUser` s HMAC-SHA1, spojení přes `urllib` bez ověření certifikátu, `sessionID` držené mezi cykly a jedno nové přihlášení při odmítnuté session.
+6. Implementovat v `IppClient` čtení uzlů přes `loadNodeList` a `loadNodeData`, výběr uzlů s `UPS` v `System.Tag` a nejnižší `UPS.PowerSummary.RemainingCapacity`.
+7. Vyhodit výjimku s popisem při nedostupném IPP, odmítnutém přihlášení, odpovědi v neočekávaném tvaru, IPP bez uzlu UPS a uzlu s `System.CommunicationLost` rovným 1.
+8. Vytáhnout z `localhost.har` odpovědi IPP bez session ID do testovacích dat a `localhost.har` smazat.
+9. Napsat testy `IppClient` proti falešnému HTTP serveru: výpočet hesla proti ručně spočítanému vzoru, přihlášení a znovupoužití session, nové přihlášení po odmítnuté session, nejnižší nabití přes dvě UPS, každá chyba podle kroku 7.
+10. Rozlišit v `metrics.py` metriky turbín a serveru, doplnit `ups.charge`, trigger Chyba napájení a makro `{$VMS.UPS.CHARGE.MIN}`.
+11. Umožnit v `sender.py` odeslání hodnot na host serveru podle `server.host`.
+12. Rozdělit cyklus v `agent.py` na část turbín a část serveru, každou s vlastním `vms.agent_status` a `vms.agent_error`; při chybě IPP neodeslat `ups.charge`, zalogovat ji a ohlásit na hostu serveru.
+13. Napsat testy agenta: chyba IPP nezmění stav turbín, chyba databáze nezmění stav serveru ani odeslání `ups.charge`, obnovení po chybě IPP bez restartu, vypnuté UPS nic neposílá, nedostupný Zabbix se na host serveru nehlásí.
+14. Doplnit test katalogu, že klíče odesílané na hosty turbín a na host serveru odpovídají jejich tabulkám v PRS.
+15. Generovat v `template.py` druhou šablonu „VMS zabbix agent server" se svými položkami, triggery, makrem a value map stavu agenta; šablonu turbín nechat beze změny a přegenerovat `data/zabbix_template.yaml`.
+16. Napsat testy šablony serveru a triggeru Chyba napájení: právě metriky, triggery a makra z UC7, problém pod 50 %, bez problému při 50 %, beze změny šablony turbín.
+17. Doplnit `NAVOD-zabbix.md` o založení hostu serveru, přiřazení šablony serveru, makro meze nabití a nastavení skupiny `server`; doplnit `CHYBY-agenta.md` o chyby čtení z IPP a `NAVRH-zabbixvms.md` o modul `ups.py`.
+18. Zvýšit verzi balíčku na 0.3.0.
+19. Ručně ověřit na serveru s IPP 1.73 a UPS na USB: `ups.charge` v Zabbixu se shoduje s nabitím ve webovém rozhraní IPP a po zastavení služby IPP se na hostu serveru ohlásí chyba.
