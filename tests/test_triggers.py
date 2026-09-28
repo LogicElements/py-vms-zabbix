@@ -169,3 +169,78 @@ def test_the_state_trigger_stays_under_the_mail_threshold():
 
     assert state.priority == "WARNING"
     assert text.priority == "AVERAGE"
+
+
+UC7 = "## UC7 – Sledování napájení serveru z UPS"
+SERVER_HEADER = "| Název triggeru | Klíč metriky | Podmínka | Priorita |"
+MACRO_HEADER = "| Makro | Výchozí hodnota | Význam |"
+
+
+def table_after(heading, header):
+    """Rows of the first table with that header below the heading, as lists of cells."""
+    lines = PRS.read_text(encoding="utf-8").splitlines()
+    start = lines.index(header, lines.index(heading))
+    rows = []
+    for line in lines[start + 2:]:
+        if not line.startswith("|"):
+            break
+        rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+    return rows
+
+
+def test_server_triggers_match_their_prs_table():
+    """UC7-R5: the template of the server carries the triggers of UC7, no more and no
+    fewer; none of them waits for another."""
+    catalog = [[trigger.name, f"`{trigger.key}`", f"`{trigger.condition}`",
+                trigger.priority] for trigger in metrics.SERVER_TRIGGERS]
+
+    assert catalog == table_after(UC7, SERVER_HEADER)
+    assert not any(trigger.blocked_by for trigger in metrics.SERVER_TRIGGERS)
+
+
+def test_server_macros_match_their_prs_table():
+    """UC7-R5: the macros of the server template, with their defaults."""
+    catalog = [[f"`{macro.name}`", macro.value, macro.description.rstrip(".")]
+               for macro in metrics.SERVER_MACROS]
+
+    assert catalog == table_after(UC7, MACRO_HEADER)
+
+
+def test_every_server_trigger_watches_a_metric_of_the_server():
+    """UC7-R5: a trigger on a key the server host is not sent would never fire."""
+    for trigger in metrics.SERVER_TRIGGERS:
+        assert trigger.key in metrics.SERVER_KEYS
+        assert METRIC_PLACEHOLDER in trigger.condition
+        assert trigger.priority in ZABBIX_PRIORITIES
+
+
+def test_every_macro_a_server_condition_uses_is_declared():
+    declared = {macro.name for macro in metrics.SERVER_MACROS}
+    found = [used for trigger in metrics.SERVER_TRIGGERS
+             for used in re.findall(r"\{\$[^}]+\}", trigger.condition)]
+
+    assert found
+    assert set(found) <= declared
+
+
+def test_the_power_fails_below_the_macro_and_not_at_it():
+    """UC7-R6: a charge less than the limit is a problem, the limit itself is not."""
+    trigger = next(trigger for trigger in metrics.SERVER_TRIGGERS
+                   if trigger.key == "ups.charge")
+    macro = next(macro for macro in metrics.SERVER_MACROS
+                 if macro.name == "{$VMS.UPS.CHARGE.MIN}")
+
+    assert trigger.condition == "last({METRIC})<{$VMS.UPS.CHARGE.MIN}"
+    assert macro.value == "50"
+    assert trigger.name == "Chyba napájení: {ITEM.VALUE}"
+    assert trigger.priority == "HIGH"
+
+
+def test_the_server_is_watched_for_silence_like_a_turbine():
+    """UC7-R4: the triggers on the state of the agent are the same on both hosts."""
+    agent_triggers = [trigger for trigger in TRIGGERS
+                      if trigger.key in metrics.AGENT_KEYS]
+    server_agent_triggers = [trigger for trigger in metrics.SERVER_TRIGGERS
+                             if trigger.key in metrics.AGENT_KEYS]
+
+    assert server_agent_triggers == agent_triggers

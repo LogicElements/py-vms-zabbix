@@ -83,3 +83,58 @@ def test_catalog_splits_into_collector_and_agent_keys():
 
 def test_by_key_finds_a_metric():
     assert metrics.by_key("vms.speed").units == "rpm"
+
+
+def table_after(heading, header):
+    """Rows of the first table with that header below the heading, as lists of cells."""
+    lines = PRS.read_text(encoding="utf-8").splitlines()
+    start = lines.index(header, lines.index(heading))
+    rows = []
+    for line in lines[start + 2:]:
+        if not line.startswith("|"):
+            break
+        rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+    return rows
+
+
+UC7 = "## UC7 – Sledování napájení serveru z UPS"
+
+
+def test_the_server_table_is_readable():
+    rows = table_after(UC7, HEADER)
+
+    assert len(rows) > 1
+    assert all(len(row) == 5 for row in rows)
+
+
+def test_server_catalog_matches_its_prs_table():
+    """UC3-R1, UC7-R2: the host of the server gets the metrics of the table in UC7,
+    no more and no fewer."""
+    catalog = [
+        [f"`{metric.key}`", metric.name, metric.value_type.value,
+         metric.units, metric.description]
+        for metric in metrics.SERVER_METRICS
+    ]
+
+    assert catalog == table_after(UC7, HEADER)
+
+
+def test_the_turbine_table_is_the_one_before_uc7():
+    """UC3-R1: the table of UC3 keeps describing the hosts of the turbines."""
+    assert prs_metric_rows() != table_after(UC7, HEADER)
+    assert "`ups.charge`" not in [row[0] for row in prs_metric_rows()]
+
+
+def test_every_server_metric_has_what_an_item_needs():
+    """UC3-R2: an item can be created from a single row, nothing is left blank."""
+    for metric in metrics.SERVER_METRICS:
+        assert re.fullmatch(r"(vms|ups)\.[a-z0-9_]+", metric.key)
+        assert metric.name
+        assert metric.description
+    assert len(set(metrics.SERVER_KEYS)) == len(metrics.SERVER_KEYS)
+
+
+def test_the_server_reports_the_state_of_the_agent_too():
+    """UC7-R4: the host of the server has a state of its own, under the same keys."""
+    assert set(metrics.AGENT_KEYS) <= set(metrics.SERVER_KEYS)
+    assert metrics.by_key("ups.charge", metrics.SERVER_METRICS).units == "%"

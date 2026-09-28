@@ -1,8 +1,12 @@
 """Catalog of the metrics the agent sends to Zabbix.
 
-The catalog mirrors the metric table of the PRS and is the single source of truth:
+The catalog mirrors the metric tables of the PRS and is the single source of truth:
 collector.py keys the collected values by it and template.py generates the Zabbix
-template from it. Names and descriptions are kept verbatim, they end up in Zabbix.
+templates from it. Names and descriptions are kept verbatim, they end up in Zabbix.
+
+There are two catalogs, one per kind of host: METRICS, TRIGGERS and MACROS for the
+host of every turbine (UC3, UC5), SERVER_METRICS, SERVER_TRIGGERS and SERVER_MACROS
+for the host of the server (UC7).
 """
 
 from __future__ import annotations
@@ -215,6 +219,10 @@ TRIGGERS = (
         priority="HIGH",
         blocked_by=TURBINE_BELOW_NOMINAL,
     ),
+)
+
+# The state of the agent is watched the same way on every host it reports to.
+AGENT_TRIGGERS = (
     Trigger(
         # Below AVERAGE on purpose: the trigger on vms.agent_error fires with this one and
         # carries the text, so both above the mail threshold would send two mails per fault.
@@ -237,6 +245,8 @@ TRIGGERS = (
     ),
 )
 
+TRIGGERS += AGENT_TRIGGERS
+
 KEYS = tuple(metric.key for metric in METRICS)
 
 # The split follows the Zdroj column of the source table in the PRS: the agent reports
@@ -245,17 +255,66 @@ AGENT_KEYS = ("vms.agent_status", "vms.agent_error")
 COLLECTOR_KEYS = tuple(key for key in KEYS if key not in AGENT_KEYS)
 
 
-def by_key(key: str) -> Metric:
+# The host of the server carries what belongs to the server as a whole rather than to
+# one turbine; the UPS is the first of it. Its state of the agent describes only the
+# reading of these metrics, so the text differs from the one of a turbine.
+SERVER_METRICS = (
+    Metric(
+        key="ups.charge",
+        name="Nabití baterie UPS",
+        value_type=ValueType.UNSIGNED,
+        units="%",
+        description="Nabití baterie UPS podle IPP; při více UPS nejnižší z nich",
+    ),
+    Metric(
+        key="vms.agent_status",
+        name="Stav agenta",
+        value_type=ValueType.UNSIGNED,
+        units="",
+        description="0 = serverové metriky přečtené bez chyby, 1 = varování, 2 = chyba. "
+                    "Popis chyby nese `vms.agent_error`.",
+    ),
+    Metric(
+        key="vms.agent_error",
+        name="Poslední chyba agenta",
+        value_type=ValueType.CHARACTER,
+        units="",
+        description="Text poslední chyby nebo varování při čtení serverových metrik; "
+                    "prázdný, když je vše v pořádku.",
+    ),
+)
+
+SERVER_MACROS = (
+    Macro(
+        name="{$VMS.UPS.CHARGE.MIN}",
+        value="50",
+        description="Nabití baterie v %, pod kterým se hlásí chyba napájení.",
+    ),
+)
+
+SERVER_TRIGGERS = (
+    Trigger(
+        name="Chyba napájení: {ITEM.VALUE}",
+        key="ups.charge",
+        condition="last({METRIC})<{$VMS.UPS.CHARGE.MIN}",
+        priority="HIGH",
+    ),
+) + AGENT_TRIGGERS
+
+SERVER_KEYS = tuple(metric.key for metric in SERVER_METRICS)
+
+
+def by_key(key: str, catalog=METRICS) -> Metric:
     """Metric of the given key; raises KeyError for a key outside the catalog."""
-    for metric in METRICS:
+    for metric in catalog:
         if metric.key == key:
             return metric
     raise KeyError(key)
 
 
-def trigger_named(name: str) -> Trigger:
+def trigger_named(name: str, catalog=TRIGGERS) -> Trigger:
     """Trigger of that name; a dependency naming no trigger would be silently lost."""
-    for trigger in TRIGGERS:
+    for trigger in catalog:
         if trigger.name == name:
             return trigger
     raise KeyError(name)
