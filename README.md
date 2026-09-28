@@ -2,7 +2,7 @@
 
 Zabbix agent pro monitorování instalací VMS od Logic Elements.
 
-Sleduje MySQL databázi (`BVMS`), do které zapisuje serverový software VMS, a odvozené metriky o stavu systému (měřené otáčky, stáří bufferů, konfigurace a časových značek, počty řádků v bufferech, ukládání a export surových dat VMS a TVMS) odesílá na Zabbix server jako trapper položky (`vms.speed`, `vms.buf_rows`, ...).
+Sleduje MySQL databázi (`BVMS`), do které zapisuje serverový software VMS, a odvozené metriky o stavu systému (měřené otáčky, stáří bufferů, konfigurace a časových značek, počty řádků v bufferech, ukládání a export surových dat VMS a TVMS) odesílá na Zabbix server jako trapper položky (`vms.speed`, `vms.buf_rows`, ...). Na samostatný host serveru posílá nabití baterie UPS, které čte z Eaton Intelligent Power Protector.
 
 Balíček vznikl vyčleněním z projektu [`pyvms`](https://github.com/LogicElements/py-vms); na něm už nezávisí a s databází `BVMS` pracuje sám.
 

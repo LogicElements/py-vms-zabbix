@@ -20,9 +20,9 @@
 | UC2-R6 | Skupina parametrů databáze MySQL: spojení a tabulka `info` | Hotovo | tests/test_collector.py |
 | UC2-R7 | Aktivní konfigurace v ProgramData, v balíčku jen výchozí šablona | Hotovo | tests/test_config.py |
 | UC2-R8 | Otevření datové složky z kontextového menu ikony | Hotovo | tests/test_tray.py |
-| UC2-R9 | Chybějící položku doplní výchozí hodnota jen u položek z novějších verzí | Zbývá | tests/test_config.py |
+| UC2-R9 | Chybějící položku doplní výchozí hodnota jen u položek z novějších verzí | Hotovo | tests/test_config.py |
 | UC2-R10 | Zápis nových položek do konfigurace při aktualizaci instalačním skriptem | Hotovo | tests/test_config.py, tests/test_service.py |
-| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Zbývá | tests/test_metrics.py |
+| UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py, tests/test_agent.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
 | UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Hotovo | tests/test_template.py |
@@ -43,13 +43,13 @@
 | UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R5 | Nová tabulka bez zápisu se první minutu nehlásí jako zastavený zápis | Hotovo | tests/test_collector.py |
-| UC7-R1 | Skupina `server` v konfiguraci: host serveru a čtení z IPP | Zbývá | |
+| UC7-R1 | Skupina `server` v konfiguraci: host serveru a čtení z IPP | Hotovo | tests/test_config.py, tests/test_agent.py |
 | UC7-R2 | Nabití baterie UPS z IPP odesílané jako `ups.charge` na host serveru | Zbývá | |
-| UC7-R3 | Nezjištěné nabití jako chyba na hostu serveru, bez `ups.charge` | Zbývá | |
-| UC7-R4 | Stav agenta na hostu serveru nezávislý na hostech turbín | Zbývá | |
+| UC7-R3 | Nezjištěné nabití jako chyba na hostu serveru, bez `ups.charge` | Hotovo | tests/test_ups.py, tests/test_agent.py |
+| UC7-R4 | Stav agenta na hostu serveru nezávislý na hostech turbín | Hotovo | tests/test_agent.py |
 | UC7-R5 | Samostatná šablona pro host serveru | Zbývá | |
-| UC7-R6 | Chyba napájení při nabití pod mezí `{$VMS.UPS.CHARGE.MIN}` | Zbývá | |
-| UC7-R7 | Dokumentace nasazení sledování UPS a jeho chyb | Zbývá | N/A |
+| UC7-R6 | Chyba napájení při nabití pod mezí `{$VMS.UPS.CHARGE.MIN}` | Hotovo | tests/test_triggers.py, tests/test_template.py |
+| UC7-R7 | Dokumentace nasazení sledování UPS a jeho chyb | Hotovo | N/A |
 
 ## Účel projektu
 

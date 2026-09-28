@@ -20,10 +20,12 @@ nepřekrývají.
 ```
 src/zabbixvms/
     __init__.py          jen __version__, nic se nereexportuje
-    config.py            Config, ZabbixConfig, DatabaseConfig, Turbine
+    config.py            Config, ZabbixConfig, DatabaseConfig, Turbine, ServerConfig, UpsConfig
     log.py               logovací soubor s rotací a zápis do Windows Event Logu
-    metrics.py           Metric, ValueType, METRICS, Trigger, TRIGGERS – katalogy
+    metrics.py           Metric, ValueType, METRICS, Trigger, TRIGGERS – katalogy turbín
+                         a SERVER_METRICS, SERVER_TRIGGERS, SERVER_MACROS – katalogy serveru
     collector.py         Collector – čte BVMS a počítá hodnoty metrik
+    ups.py               IppClient – čte nabití UPS z Eaton IPP
     sender.py            TrapperSender – odesílá hodnoty do Zabbixu
     agent.py             Agent – cyklus sběr → odeslání → prodleva
     service.py           ZabbixVmsService – služba Windows a její registrace
@@ -39,16 +41,17 @@ src/zabbixvms/
 
 | Modul | Odpovědnost | Requirementy |
 | --- | --- | --- |
-| `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů a prefixů surových dat, doplnění položek z novějších verzí v paměti i do souboru | UC2-R1 až UC2-R10, UC6-R1 |
+| `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů a prefixů surových dat, skupina `server` s přístupem k IPP, doplnění položek z novějších verzí v paměti i do souboru | UC2-R1 až UC2-R10, UC6-R1, UC7-R1 |
 | `log.py` | logovací soubor vedle konfigurace, rotace, souběžný zápis služby i tray aplikace, zápis do Event Logu | UC5-R1, UC5-R2 |
-| `metrics.py` | definice metrik: klíč, název, typ hodnoty, jednotka, popis; definice triggerů: název, klíč metriky, podmínka, priorita | UC3-R1, UC3-R2, UC5-R4 |
+| `metrics.py` | definice metrik: klíč, název, typ hodnoty, jednotka, popis; definice triggerů: název, klíč metriky, podmínka, priorita; zvlášť pro hosty turbín a pro host serveru | UC3-R1, UC3-R2, UC5-R4, UC7-R5 |
 | `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC4-R8, UC6-R2 až UC6-R5 |
-| `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>`, kontrola odmítnutých hodnot | UC2-R2, UC2-R5 |
-| `agent.py` | cyklus přes turbíny, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6 |
+| `ups.py` | přihlášení k Eaton IPP, držení session, nejnižší nabití přes UPS, chyby čtení | UC7-R2, UC7-R3 |
+| `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>` nebo pod hostem serveru, kontrola odmítnutých hodnot | UC2-R2, UC2-R5, UC7-R2 |
+| `agent.py` | cyklus přes turbíny a server, každý s vlastním stavem agenta, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6, UC7-R3, UC7-R4 |
 | `service.py` | registrace a odregistrace služby, automatický start, oprávnění k ovládání, příkaz `complete-config` pro aktualizaci | UC1-R2, UC1-R3, UC1-R7, UC2-R10 |
 | `servicecontrol.py` | zjištění stavu služby a její spuštění, zastavení a restart | UC1-R5, UC1-R6 |
 | `tray.py` | ikona podle stavu služby, kontextové menu včetně otevření datové složky | UC1-R5, UC1-R6, UC1-R8, UC2-R8 |
-| `template.py` | šablona pro Zabbix vygenerovaná z katalogů metrik a triggerů | UC3-R4, UC5-R4 |
+| `template.py` | šablony pro Zabbix vygenerované z katalogů metrik a triggerů, pro turbíny a pro server | UC3-R4, UC5-R4, UC7-R5 |
 
 ## Rozhodnutí
 
@@ -120,3 +123,54 @@ nepřipojil znovu. Na serveru to vypadalo takto: při přepnutí tabulek se hlá
 staré tabulky a u jedné turbíny se počítaly dvě tabulky, přestože nové připojení vidělo
 jednu. Agent se proto připojuje s `autocommit=True` (UC4-R8). Na lokální MySQL 5.7 se to
 projevit nemohlo: `information_schema` tam transakční není a tabulky jsou MyISAM.
+
+### Nabití UPS se čte z webového rozhraní Eaton IPP
+
+UPS na USB si zabírá ovladač Eatonu, takže ji Windows nevidí jako baterii a
+`Win32_Battery` nic nevrací. SNMP by šlo jen na UPS se síťovou kartou. Zbývá IPP, který
+UPS spravuje a USB i síťové připojení vystavuje stejně. Dokumentované rozhraní nemá, a tak
+`ups.py` volá tytéž služby jako webová stránka IPP 1.73. Každá služba je POST formuláře na
+`<url>/server/<služba>?action=<akce>` a odpovídá JSONem:
+
+| Služba a akce | K čemu |
+| --- | --- |
+| `user_srv.js` `queryLoginChallenge` | výzva k přihlášení |
+| `user_srv.js` `loginUser` | přihlášení, vrací `sessionID` |
+| `data_srv.js` `getNodeData` | seznam zdrojů napájení (`System.Tag == PWS`) s jejich tagy |
+| `data_srv.js` `loadNodeData` | aktuální hodnoty vybraných uzlů |
+
+Heslo se posílá jako HMAC-SHA1 přes výzvu s klíčem SHA1 hesla v šestnáctkovém zápisu,
+stejně jako v `user_settings.js` stránky. IPP počítá SHA1 vlastní funkcí v JavaScriptu, která
+čte znaky textu, ne jeho bajty. Se standardním SHA1 se proto shoduje jen pro ASCII, což
+ověřilo spuštění jeho `libs/utils.js` pod Windows Script Host. Konfigurace s heslem mimo ASCII
+se odmítne.
+
+Za UPS se považuje uzel, který má mezi tagy `UPS`. Nabitím je
+`UPS.PowerSummary.RemainingCapacity`, a když IPP spravuje víc UPS, hlásí se ta, která je na
+tom nejhůř. `loadNodeMeasures` se nepoužívá, protože vrací jen historii změn a u nabití, které
+se nemění, je prázdný.
+
+Session se drží mezi cykly. Jak IPP odmítá vypršelou session, se zaznamenat nepodařilo,
+a proto každé selhání čtení nad starou session vede k jednomu novému přihlášení a opakování
+čtení ve stejném cyklu. Výjimkou je `System.CommunicationLost`: tehdy IPP s UPS ztratil
+spojení a session za to nemůže.
+
+IPP má vlastní certifikát podepsaný sám sebou a běží na tomtéž serveru, takže se certifikát
+neověřuje. Jeden dotaz smí trvat 10 sekund, aby zaseknutý IPP nezdržel cyklus turbín.
+
+Testy běží proti falešnému IPP. Odpovědi datových služeb jsou ty, které IPP 1.73 poslal
+prohlížeči, uložené v `tests/data/ipp`. Odpovědi přihlášení zaznamenané nejsou, jejich tvar
+vychází z toho, co z nich čte `user_settings.js`.
+
+### Turbíny a server jsou dvě nezávislé části cyklu
+
+Stav agenta se hlásí na každý host zvlášť. Hosty turbín popisují jen čtení z databáze, host
+serveru jen čtení serverových metrik. Cyklus v `agent.py` má proto dvě části, každou
+s vlastním `status` a `error_text`, a chyba jedné nezastaví druhou. Nedostupný Zabbix se
+počítá jednou za cyklus bez ohledu na to, kolik hostů se nedovolalo. Log o něm pak přijde po
+pěti cyklech stejně jako dřív.
+
+Katalogy metrik a triggerů jsou dva a šablony v `zabbix_template.yaml` také. Obě šablony
+mají `vms.agent_status` a stejné triggery nad ním, a tak má šablona serveru svá UUID odvozená
+s předponou `server:`. Šablona turbín si ponechává UUID, se kterými byla exportovaná poprvé,
+takže nový import ji aktualizuje na místě.

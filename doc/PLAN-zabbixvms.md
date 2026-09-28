@@ -414,3 +414,12 @@ serveru obešlo bez Chyby zápisu surových dat.
 17. Doplnit `NAVOD-zabbix.md` o založení hostu serveru, přiřazení šablony serveru, makro meze nabití a nastavení skupiny `server`; doplnit `CHYBY-agenta.md` o chyby čtení z IPP a `NAVRH-zabbixvms.md` o modul `ups.py`.
 18. Zvýšit verzi balíčku na 0.3.0.
 19. Ručně ověřit na serveru s IPP 1.73 a UPS na USB: `ups.charge` v Zabbixu se shoduje s nabitím ve webovém rozhraní IPP a po zastavení služby IPP se na hostu serveru ohlásí chyba.
+
+**Stav:** kroky 1 až 18 hotové, testy prošly (401). UC2-R9, UC3-R1, UC7-R1, UC7-R3, UC7-R4,
+UC7-R6 a UC7-R7 jsou Hotovo. Zbývá ruční krok 19 na serveru a import šablony do Zabbixu:
+UC7-R2 čeká na shodu `ups.charge` s webovým rozhraním IPP, UC7-R5 na to, že se soubor se
+dvěma šablonami naimportuje bez ruční úpravy. Heslo do IPP musí být ASCII: vlastní SHA1
+v `libs/utils.js` IPP se se standardním shoduje jen pro ASCII, ověřeno spuštěním pod Windows
+Script Host. Jak IPP odmítá vypršelou session, se zaznamenat nepodařilo, a tak se agent
+po jakémkoli selhání čtení nad starou session jednou znovu přihlásí; na serveru stojí za to
+v logu ověřit, že se po vypršení session nabití dál hlásí.

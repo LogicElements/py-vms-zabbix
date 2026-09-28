@@ -8,6 +8,7 @@ Přehled toho, co agent hlásí, kde chyby vznikají a kde k nim hledat podrobno
 | --- | --- |
 | `vms.agent_status` v Zabbixu | 0 bez chyby, 1 varování, 2 chyba |
 | `vms.agent_error` v Zabbixu | text poslední chyby nebo varování, **zkrácený na 255 znaků** |
+| host serveru v Zabbixu | vlastní `vms.agent_status` a `vms.agent_error`, jen o čtení nabití UPS z IPP |
 | `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log` | tentýž text v plném znění, s časem a úrovní |
 | Windows Event Log, zdroj `ZabbixVms` | jen start a zastavení služby a chyby, které brání jejímu běhu |
 
@@ -48,6 +49,37 @@ dál a další cyklus to zkusí znovu.
 - chyby `zabbix_utils` při odesílání, které nejsou o dostupnosti serveru: nečitelná
   odpověď trapperu nebo selhání při vytváření socketu
 
+**Na hostu serveru, při čtení UPS z IPP:**
+
+Tyhle chyby vidí jen host serveru. Hosty turbín hlásí dál jen to, co se týká databáze, a na
+hostu serveru se naopak neobjeví nic o MySQL. V cyklu s chybou agent nabití `ups.charge`
+neodešle. Jakmile příčina zmizí, nabití v dalším cyklu zase přijde, bez restartu služby.
+
+- `IPP at https://localhost:4680 cannot be reached: ...`
+  Na adrese z `server.ups.url` nikdo neodpovídá, nebo neodpověděl do 10 sekund. Typicky
+  neběží služba IPP nebo je v konfiguraci špatná adresa či port. Za dvojtečkou je důvod
+  od síťové vrstvy, například odmítnuté spojení nebo vypršený čas.
+- `IPP turned down the login of user 'admin'`
+  Špatné `login` nebo `password` ve skupině `server.ups`. Údaje ověříte přihlášením do
+  webového rozhraní IPP.
+- `IPP manages no UPS`
+  IPP běží a přihlášení prošlo, ale mezi zdroji napájení nemá žádnou UPS. Typicky UPS
+  v IPP ještě není přidaná nebo ji IPP po výměně nenašel.
+- `IPP lost the communication with UPS GA10R14030`
+  IPP o UPS ví, ale ztratil s ní spojení, například kvůli odpojenému kabelu USB nebo
+  výpadku síťové karty UPS. Za UPS je její sériové číslo z IPP. Nabití, které IPP drží,
+  je poslední známé, ne aktuální, proto se neposílá.
+- `IPP answered getNodeData with HTTP 500`, `IPP answered loadNodeData with something else
+  than JSON`, `IPP gave UPS ... no number in UPS.PowerSummary.RemainingCapacity` a podobné
+  IPP odpověděl jinak, než jak odpovídá verze 1.73, podle které agent vznikl. Nejčastěji
+  jde o jinou verzi IPP. Podrobnosti najdete v logu.
+- `Zabbix rejected 1 of 1 values of host LE_server`
+  Host serveru toho jména v Zabbixu není. Jméno musí přesně odpovídat `server.host`
+  z konfigurace.
+
+Kvůli vypršelé session se agent k IPP jednou za cyklus přihlásí znovu a čtení zopakuje.
+Chyba se hlásí, teprve když selže i to.
+
 ## Stav 1 — varování
 
 Cyklus proběhl celý, ale něco stojí za pozornost.
@@ -70,6 +102,13 @@ metriku odeslat nemůže:
   jinou turbínu nebo posílal pod jiného hosta. Výchozí hodnotu dostanou jen položky, které
   přibyly v novější verzi agenta; ty si doplní sám.
 - `cannot read configuration ...` u poškozeného souboru, například s chybou v zápisu JSON
+- `server.host is empty, the UPS is watched only with a Zabbix host of the server to send it to`
+  Sledování UPS je zapnuté, ale chybí jméno hostu serveru.
+- `server.ups.password may hold ASCII characters only, IPP cannot take any other`
+  IPP heslo s diakritikou od agenta nepřijme, viz [návod na Zabbix](NAVOD-zabbix.md),
+  kapitola 7.
+- `server.ups.enabled is 'false', true or false is expected`
+  Hodnota zapnutí UPS je v uvozovkách. Musí to být `true` nebo `false` bez uvozovek.
 
 Tyhle chyby najdete v logu a v Event Logu. V Zabbixu se projeví jen nepřímo, triggerem
 „Z hostu nepřišla žádná hodnota 5m“ — proto má tento trigger vyšší prioritu než hlášená
