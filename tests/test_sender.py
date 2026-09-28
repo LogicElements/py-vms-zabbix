@@ -4,7 +4,7 @@ values go to and the rejected values (UC2-R2, UC2-R5)."""
 import pytest
 
 from zabbixvms.config import Turbine, ZabbixConfig
-from zabbixvms.sender import SenderError, TrapperSender, host_name
+from zabbixvms.sender import SenderError, TrapperSender, ZabbixUnreachable, host_name
 
 
 class FakeResponse:
@@ -105,3 +105,37 @@ def test_accepted_values_are_no_error():
     created[0].response = FakeResponse(processed=10, failed=0)
 
     sender.send(Turbine(name="TG1", system_id=11), {"vms.speed": 1.0})
+
+
+def test_values_are_sent_under_a_host_given_whole():
+    """UC7-R2: the host of the server is set whole, not made of location."""
+    sender, created = make_sender(ZabbixConfig(location="Praha"))
+
+    sender.send_to("Server_VMS", {"ups.charge": 87})
+
+    items = created[0].sent[0]
+    assert [(item.host, item.key, item.value) for item in items] == \
+        [("Server_VMS", "ups.charge", "87")]
+
+
+def test_values_rejected_on_a_host_given_whole_are_an_error():
+    sender, created = make_sender()
+    created[0].response = FakeResponse(processed=0, failed=1)
+
+    with pytest.raises(SenderError, match="Server_VMS"):
+        sender.send_to("Server_VMS", {"ups.charge": 87})
+
+
+def test_a_failed_exchange_on_a_host_given_whole_is_unreachable():
+    """UC7-R4: an unreachable Zabbix is the same thing whichever host it hits."""
+    from zabbix_utils import ProcessingError
+
+    sender, created = make_sender()
+
+    def fail(items):
+        raise ProcessingError("Couldn't connect to all of cluster nodes")
+
+    created[0].send = fail
+
+    with pytest.raises(ZabbixUnreachable):
+        sender.send_to("Server_VMS", {"ups.charge": 87})

@@ -1,7 +1,8 @@
 """Sends the collected values to Zabbix as trapper items.
 
 One turbine is one Zabbix host, named `<location>_<turbine name>`, so the metrics of
-different turbines and different locations never mix.
+different turbines and different locations never mix. The server is one more host,
+whose name the configuration gives whole.
 """
 
 from __future__ import annotations
@@ -43,7 +44,11 @@ class TrapperSender:
 
     def send(self, turbine: Turbine, values: dict[str, float]) -> None:
         """Send one turbine's values; raise SenderError for rejected values."""
-        host = self.host_name(turbine)
+        self.send_to(self.host_name(turbine), values)
+
+    def send_to(self, host: str, values: dict[str, float]) -> None:
+        """Send values under the host of that name; raise SenderError for rejected
+        values and ZabbixUnreachable when the exchange itself failed."""
         items = [ItemValue(host, key, str(value)) for key, value in values.items()]
 
         try:
