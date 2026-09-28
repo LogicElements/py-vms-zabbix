@@ -45,6 +45,11 @@ NO_RAW_DATA = 0
 # TVMS starts a table every day, VMS every few hours.
 RAW_DATE_FORMATS = {8: "%Y%m%d", 14: "%Y%m%d%H%M%S"}
 
+# A raw data table nothing has been written to yet stands for a stopped write only once
+# it is older than this. The system creates the table and writes into it a moment
+# later, and a cycle of the agent can fall in between.
+FRESH_RAW_TABLE = timedelta(minutes=1)
+
 
 class CollectorError(Exception):
     """The database does not hold what the agent needs for a turbine."""
@@ -83,12 +88,13 @@ def age(moment: datetime | None, now: datetime) -> int:
 
 @dataclass(frozen=True)
 class RawTable:
-    """One raw data table: when its name says it was started and when it was last
-    written to, as information_schema knows it."""
+    """One raw data table: when its name says it was started, and when it was
+    really created and last written to, as information_schema knows it."""
 
     name: str
     created: datetime
     updated: datetime | None
+    create_time: datetime | None
 
 
 def raw_table_created(prefix: str, name: str) -> datetime | None:
@@ -118,6 +124,23 @@ def like_prefix(prefix: str) -> str:
     return prefix.replace("\\", "\\\\").replace("_", "\\_").replace("%", "\\%") + "\\_%"
 
 
+def last_write(table: RawTable | None, now: datetime) -> datetime | None:
+    """When the table was last written to, as far as its write age goes.
+
+    A table nothing has been written to yet has no UPDATE_TIME. Within FRESH_RAW_TABLE
+    of its creation that is not a stopped write but the first rows still to come, so
+    the creation stands in for a write; after that the table is as old as it gets.
+    The creation is CREATE_TIME, not the date in the name: a TVMS table carries only
+    its day, which says nothing of when in that day it came to be.
+    """
+    if table is None:
+        return None
+    if (table.updated is None and table.create_time is not None
+            and now - table.create_time < FRESH_RAW_TABLE):
+        return table.create_time
+    return table.updated
+
+
 def raw_values(raw_tables: dict[str, list[RawTable]], now: datetime) -> dict[str, int]:
     """Raw data metrics of one turbine, summed up over its prefixes as the worst one.
 
@@ -130,7 +153,7 @@ def raw_values(raw_tables: dict[str, list[RawTable]], now: datetime) -> dict[str
     for tables in raw_tables.values():
         count = max(count, len(tables))
         newest = max(tables, key=lambda table: table.created, default=None)
-        write_age = max(write_age, age(newest.updated if newest else None, now))
+        write_age = max(write_age, age(last_write(newest, now), now))
     return {"vms.raw_tables": count, "vms.raw_write_age": write_age}
 
 
@@ -245,7 +268,8 @@ class Collector:
             return {}
 
         conditions = " OR ".join(["TABLE_NAME LIKE %s"] * len(turbine.raw_prefixes))
-        query = ("SELECT TABLE_NAME, UPDATE_TIME FROM information_schema.TABLES "
+        query = ("SELECT TABLE_NAME, CREATE_TIME, UPDATE_TIME "
+                 "FROM information_schema.TABLES "
                  f"WHERE TABLE_SCHEMA = %s AND ({conditions})")
         patterns = [like_prefix(prefix) for prefix in turbine.raw_prefixes]
 
@@ -261,8 +285,9 @@ class Collector:
             for prefix in turbine.raw_prefixes:
                 created = raw_table_created(prefix, row["TABLE_NAME"])
                 if created is not None:
-                    tables[prefix].append(
-                        RawTable(row["TABLE_NAME"], created, row["UPDATE_TIME"]))
+                    tables[prefix].append(RawTable(
+                        row["TABLE_NAME"], created, row["UPDATE_TIME"],
+                        row["CREATE_TIME"]))
         return tables
 
     def collect(self, turbine: Turbine, now: datetime | None = None) -> dict[str, float]:

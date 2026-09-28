@@ -30,6 +30,7 @@
 | 9 | Doplňování konfigurace | [x] |
 | 10 | Aktuální statistiky z information_schema | [ ] |
 | 11 | Připojení bez otevřené transakce | [ ] |
+| 12 | Nová tabulka surových dat bez zápisu | [x] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -368,3 +369,21 @@ bez tohoto nastavení je až den stará.
 připojení otevřeném od svého startu hlásila u TG42 dvě tabulky surových dat, nové připojení
 vidělo jednu a po restartu služby hlásila jednu i ona. UC4-R8 zůstává Zbývá do kroku 6, tedy
 dokud verze 0.2.3 nepřečká přepnutí tabulek bez restartu.
+
+### Etapa 12 – Nová tabulka surových dat bez zápisu
+**Účel:** Nehlásit chybu zápisu ve chvíli, kdy systém novou tabulku surových dat založil, ale ještě do ní nezapsal.
+**Řeší:** UC6-R4, UC6-R5
+**Kroky:**
+1. Číst v dotazu na tabulky surových dat i `CREATE_TIME` a držet ho v `RawTable`.
+2. Počítat stáří zápisu nejnovější tabulky bez `UPDATE_TIME` od `CREATE_TIME`, dokud od něj neuplynula minuta (`FRESH_RAW_TABLE`).
+3. Doplnit `FakeConnection` v testech collectoru o `CREATE_TIME`.
+4. Napsat testy: tabulka bez zápisu mladší než minuta, tabulka právě minutu stará, mladá tabulka se zápisem, minuta od `CREATE_TIME` a ne od data v názvu, tabulka bez `CREATE_TIME`.
+5. Doplnit `NAVRH-zabbixvms.md` a `NAVOD-zabbix.md`.
+6. Zvýšit verzi balíčku na 0.2.4.
+7. Ručně ověřit na serveru: při přepnutí tabulek surových dat se neozve Chyba zápisu surových dat.
+
+**Stav:** hotovo. Testy prošly, takže UC6-R4 i UC6-R5 jsou Hotovo; UC6-R4 se kvůli úpravě
+DoD vracel na Zbývá. Proti lokální MySQL 5.7 se potvrdilo, že právě založená InnoDB tabulka
+má `UPDATE_TIME` NULL a `CREATE_TIME` vyplněný: dřív z toho bylo stáří zápisu jeden měsíc,
+teď 0 s. Ruční krok 7 prošel: první přepnutí tabulek surových dat s verzí 0.2.4 se na
+serveru obešlo bez Chyby zápisu surových dat.

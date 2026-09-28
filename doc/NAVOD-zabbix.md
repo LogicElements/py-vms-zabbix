@@ -151,7 +151,9 @@ projeví po restartu služby.
 - *Chyba exportu surových dat*, když má jeden prefix v databázi 3 a více tabulek: vzniká nová
   tabulka, ale ty staré se neexportují a nemažou.
 - *Chyba zápisu surových dat*, když se do nejnovější tabulky některého prefixu 5 minut nic
-  nezapsalo. Za klidu turbíny mlčí, viz kapitola 4.
+  nezapsalo. Za klidu turbíny mlčí, viz kapitola 4. Na první zápis do nově založené tabulky
+  čeká agent minutu; zůstane-li tabulka i potom prázdná, hlásí stáří zápisu jeden měsíc
+  a chyba se ozve hned.
 
 Překlep v prefixu vypadá stejně jako software, který vůbec neběží: prefix nemá žádnou tabulku
 a stáří zápisu se hlásí jako jeden měsíc. Když chyba zápisu přijde hned po nasazení, porovnejte

@@ -42,6 +42,7 @@
 | UC6-R2 | Tabulka patří k prefixu podle celého názvu `<prefix>_<datum>` | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
+| UC6-R5 | Nová tabulka bez zápisu se první minutu nehlásí jako zastavený zápis | Hotovo | tests/test_collector.py |
 
 ## Účel projektu
 
@@ -289,7 +290,7 @@ hodnoty metrik a odešle je do Zabbixu. Zdroj každé metriky určuje tabulka n�
 | `vms.buf_bulk` | řádek `info` turbíny | `info`, `system_id` | `Time_bulk_1`, `Time_bulk_2` | součet hodnot přes nastavené buffery |
 | `vms.buf_rows` | `information_schema.TABLES` | `database`, bufferové tabulky turbíny | `TABLE_ROWS` | součet hodnot přes nastavené buffery |
 | `vms.raw_tables` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME` | počet tabulek každého prefixu (UC6-R2), největší z nich |
-| `vms.raw_write_age` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME`, `UPDATE_TIME` | stáří `UPDATE_TIME` nejnovější tabulky každého prefixu, největší z nich |
+| `vms.raw_write_age` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME`, `UPDATE_TIME`, `CREATE_TIME` | stáří `UPDATE_TIME` nejnovější tabulky každého prefixu, u nové tabulky bez zápisu první minutu stáří `CREATE_TIME` (UC6-R5), největší z nich |
 | `vms.agent_status` | vlastní stav agenta | – | – | 0, 1 nebo 2 podle průběhu cyklu |
 | `vms.agent_error` | vlastní stav agenta | – | – | text poslední chyby, jinak prázdný řetězec |
 
@@ -451,7 +452,8 @@ liší jen periodou a tvarem data v názvu:
 Jedna turbína může mít prefixy obou systémů a hlásí se pod svým hostem. Agent sleduje dvě
 věci: kolik tabulek jednoho prefixu v databázi je, protože hromadící se tabulky znamenají,
 že neběží export, a jak dlouho se do nejnovější tabulky nezapsalo. Za klidu turbíny se surová
-data nezapisují a u VMS nevznikají ani nové tabulky.
+data nezapisují a u VMS nevznikají ani nové tabulky. Nová tabulka je po založení chvíli
+prázdná, než do ní systém zapíše první data, a cyklus agenta může padnout právě do té chvíle.
 
 Stáří nejnovější tabulky ani existence tabulky pro dnešní den se nesledují. Agent proto
 nepozná, že přestaly vznikat nové tabulky, když se do poslední dál zapisuje, a za klidu
@@ -486,5 +488,13 @@ turbíny nepozná výpadek TVMS.
 **DoD:**
 - Pro každý prefix se stáří zápisu počítá z `UPDATE_TIME` jeho nejnovější tabulky podle UC4-R4; `vms.raw_write_age` je největší z nich.
 - Zápis do starší tabulky prefixu stáří zápisu nesnižuje.
-- Prefix bez tabulky i tabulka bez `UPDATE_TIME` se hlásí jako jeden měsíc.
+- Prefix bez tabulky i tabulka bez `UPDATE_TIME` se hlásí jako jeden měsíc; výjimkou je nově založená tabulka podle UC6-R5.
 - Šablona obsahuje trigger, který hlásí chybu zápisu, když stáří zápisu přesáhne 5 minut, a je závislý na triggeru Turbína pod nominálními otáčkami.
+
+### UC6-R5
+**Popis:** Nová tabulka surových dat, do které se ještě nezapsalo, se první minutu po svém založení nehlásí jako zastavený zápis.
+**DoD:**
+- U nejnovější tabulky prefixu bez `UPDATE_TIME`, od jejíhož založení podle `CREATE_TIME` neuplynula 1 minuta, se stáří zápisu počítá od `CREATE_TIME`.
+- Od uplynutí 1 minuty od založení se tabulka bez `UPDATE_TIME` hlásí podle UC6-R4 jako jeden měsíc.
+- Tabulka, do které se už zapsalo, má stáří zápisu podle `UPDATE_TIME` bez ohledu na to, kdy vznikla.
+- Minuta se počítá od `CREATE_TIME`, ne od data v názvu tabulky.

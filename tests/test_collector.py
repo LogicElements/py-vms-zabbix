@@ -1,7 +1,7 @@
 """Tests of the collector against faked database objects: the computations of the
 source table, the -1 limit, the zeros of an unconfigured buffer and the raw data tables
 (UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC4-R7, UC4-R8, UC3-R3, UC6-R2,
-UC6-R3, UC6-R4)."""
+UC6-R3, UC6-R4, UC6-R5)."""
 
 import re
 from datetime import datetime, timedelta
@@ -89,7 +89,8 @@ class FakeCursor:
         if " LIKE " in query:
             patterns = [like_regex(pattern) for pattern in params[1:]]
             self._rows = [
-                {"TABLE_NAME": name, "UPDATE_TIME": updated}
+                {"TABLE_NAME": name, "UPDATE_TIME": updated,
+                 "CREATE_TIME": self._fake.raw_created.get(name)}
                 for name, updated in self._fake.raw_tables.items()
                 if any(pattern.fullmatch(name) for pattern in patterns)
             ]
@@ -113,11 +114,13 @@ class FakeCursor:
 
 class FakeConnection:
     def __init__(self, info_rows=(), table_rows=None, raw_tables=None,
-                 refuse_settings=None):
+                 raw_created=None, refuse_settings=None):
         self.info_rows = list(info_rows)
         self.table_rows = dict(table_rows or {})
         # Raw data tables by name, each with its UPDATE_TIME.
         self.raw_tables = dict(raw_tables or {})
+        # CREATE_TIME of the raw data tables by name; a table left out has none.
+        self.raw_created = dict(raw_created or {})
         # What a SET statement raises instead of taking effect, if anything.
         self.refuse_settings = refuse_settings
         self.settings = []
@@ -456,8 +459,9 @@ def raw_turbine(*prefixes):
     return Turbine(name="TG1", system_id=11, buffers=[], raw_prefixes=list(prefixes))
 
 
-def collect_raw(turbine, raw_tables, database="BVMS"):
-    connection = FakeConnection(info_rows=[info_row(SystemId=11)], raw_tables=raw_tables)
+def collect_raw(turbine, raw_tables, database="BVMS", created=None):
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)], raw_tables=raw_tables,
+                                raw_created=created)
     collector = make_collector(connection, database=database)
     return collector.collect(turbine, NOW), connection, collector
 
@@ -542,9 +546,66 @@ def test_a_prefix_without_a_table_is_as_old_as_it_gets():
 
 
 def test_a_table_without_an_update_time_is_as_old_as_it_gets():
-    """UC6-R4: InnoDB forgets it on a restart of MySQL, until the next write."""
+    """UC6-R4: InnoDB forgets it on a restart of MySQL, until the next write, and the
+    table is long past its first minute."""
+    table = vms_table("btt_tg1", NOW - timedelta(hours=1))
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {table: None},
+                               created={table: NOW - timedelta(hours=1)})
+
+    assert values["vms.raw_write_age"] == MAX_AGE_SECONDS
+
+
+def test_a_table_created_a_moment_ago_is_no_stopped_write():
+    """UC6-R5: the system creates the new table and writes into it a moment later; a
+    cycle in between sees it empty and counts from its creation, not from the write
+    into the table before."""
+    started = NOW - timedelta(seconds=59)
+    new = vms_table("btt_tg1", started)
     values, _, _ = collect_raw(raw_turbine("btt_tg1"), {
-        vms_table("btt_tg1", NOW - timedelta(hours=1)): None,
+        new: None,
+        vms_table("btt_tg1", NOW - timedelta(hours=4)): NOW - timedelta(seconds=5),
+    }, created={new: started})
+
+    assert values["vms.raw_tables"] == 2
+    assert values["vms.raw_write_age"] == 59
+
+
+def test_a_new_table_still_empty_after_a_minute_is_as_old_as_it_gets():
+    """UC6-R4, UC6-R5: once the minute is over, nothing written is a stopped write."""
+    started = NOW - timedelta(minutes=1)
+    new = vms_table("btt_tg1", started)
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {new: None},
+                               created={new: started})
+
+    assert values["vms.raw_write_age"] == MAX_AGE_SECONDS
+
+
+def test_a_young_table_written_to_counts_its_write():
+    """UC6-R5: the creation stands in only for a write that has not come yet."""
+    started = NOW - timedelta(seconds=30)
+    new = vms_table("btt_tg1", started)
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {new: NOW - timedelta(seconds=4)},
+                               created={new: started})
+
+    assert values["vms.raw_write_age"] == 4
+
+
+def test_the_minute_runs_from_the_creation_not_from_the_name():
+    """UC6-R5: the day in the name of a TVMS table says nothing of when in that day
+    the table came to be."""
+    today = tvms_table("tvms_tg31", NOW)
+    values, _, _ = collect_raw(raw_turbine("tvms_tg31"), {
+        today: None,
+        tvms_table("tvms_tg31", NOW - timedelta(days=1)): NOW - timedelta(seconds=30),
+    }, created={today: NOW - timedelta(seconds=20)})
+
+    assert values["vms.raw_write_age"] == 20
+
+
+def test_a_table_created_who_knows_when_gets_no_minute():
+    """UC6-R4: without CREATE_TIME nothing says the table is new."""
+    values, _, _ = collect_raw(raw_turbine("btt_tg1"), {
+        vms_table("btt_tg1", NOW - timedelta(seconds=10)): None,
     })
 
     assert values["vms.raw_write_age"] == MAX_AGE_SECONDS
@@ -582,6 +643,7 @@ def test_raw_data_tables_are_asked_for_in_the_configured_database():
     query, params = connection.executed[-1]
     assert "information_schema.TABLES" in query
     assert "UPDATE_TIME" in query
+    assert "CREATE_TIME" in query
     assert params == ("BVMS2", r"btt\_tg11\_%", r"tg11\_out\_%")
 
 

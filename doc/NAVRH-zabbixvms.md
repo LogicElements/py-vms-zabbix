@@ -42,7 +42,7 @@ src/zabbixvms/
 | `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů a prefixů surových dat, doplnění položek z novějších verzí v paměti i do souboru | UC2-R1 až UC2-R10, UC6-R1 |
 | `log.py` | logovací soubor vedle konfigurace, rotace, souběžný zápis služby i tray aplikace, zápis do Event Logu | UC5-R1, UC5-R2 |
 | `metrics.py` | definice metrik: klíč, název, typ hodnoty, jednotka, popis; definice triggerů: název, klíč metriky, podmínka, priorita | UC3-R1, UC3-R2, UC5-R4 |
-| `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC6-R2 až UC6-R4 |
+| `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC4-R8, UC6-R2 až UC6-R5 |
 | `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>`, kontrola odmítnutých hodnot | UC2-R2, UC2-R5 |
 | `agent.py` | cyklus přes turbíny, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6 |
 | `service.py` | registrace a odregistrace služby, automatický start, oprávnění k ovládání, příkaz `complete-config` pro aktualizaci | UC1-R2, UC1-R3, UC1-R7, UC2-R10 |
@@ -83,16 +83,23 @@ by se hodnoty dohledávaly podle pozice. U bufferů se z `information_schema` č
 `Date_Buffer_1` a `Date_Buffer_2` informační tabulky.
 
 Třetí dotaz, na tabulky surových dat (UC6), už v `pyvms` neměl předlohu. Pro všechny prefixy
-turbíny se ptá jednou, na `TABLE_NAME` a `UPDATE_TIME` z `information_schema.TABLES`, se
-vzorem `LIKE` pro každý prefix. Podtržítko je ve vzoru `LIKE` zástupný znak, takže se escapuje
-(`btt\_tg1\_%`); jinak by prefix `btt_tg1` našel i tabulky `btt_tg11_…`. Vzor ale dotaz jen
-zužuje, o tom, jestli tabulka k prefixu patří, rozhoduje až celý název s platným datem na
-konci. Datum se čte podle počtu číslic: 8 u TVMS, 14 u VMS.
+turbíny se ptá jednou, na `TABLE_NAME`, `CREATE_TIME` a `UPDATE_TIME`
+z `information_schema.TABLES`, se vzorem `LIKE` pro každý prefix. Podtržítko je ve vzoru
+`LIKE` zástupný znak, takže se escapuje (`btt\_tg1\_%`); jinak by prefix `btt_tg1` našel
+i tabulky `btt_tg11_…`. Vzor ale dotaz jen zužuje, o tom, jestli tabulka k prefixu patří,
+rozhoduje až celý název s platným datem na konci. Datum se čte podle počtu číslic: 8 u TVMS,
+14 u VMS.
 
 U MyISAM je `UPDATE_TIME` čas poslední změny datového souboru. U InnoDB, se kterým pracují
 cílové servery, je to čas posledního `COMMIT`, který MySQL drží jen v paměti. Po restartu
 MySQL je proto NULL, dokud se do tabulky něco nezapíše, a agent ho do té doby hlásí jako
 jeden měsíc.
+
+NULL má i právě založená tabulka. Systém ji založí a první data do ní zapíše až o chvíli
+později, takže cyklus agenta mezi tím by ohlásil zastavený zápis. Nejnovější tabulce bez
+`UPDATE_TIME` se proto první minutu po založení počítá stáří zápisu od `CREATE_TIME`
+(UC6-R5). Minuta běží od `CREATE_TIME`, ne od data v názvu: TVMS má v názvu jen den, který
+o hodině založení nic neříká.
 
 MySQL 8 navíc `TABLE_ROWS`, `UPDATE_TIME` a další statistiky v `information_schema.TABLES`
 nečte pokaždé z úložiště. Vrací je z mezipaměti, kterou obnovuje až po uplynutí
