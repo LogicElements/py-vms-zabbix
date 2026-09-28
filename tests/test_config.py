@@ -1,6 +1,6 @@
 """Tests of the configuration: round trip, its place in ProgramData, the accepted
 ranges and the fields a newer agent adds (UC2-R1, UC2-R3, UC2-R4, UC2-R5, UC2-R6,
-UC2-R7, UC2-R9, UC2-R10, UC6-R1)."""
+UC2-R7, UC2-R9, UC2-R10, UC6-R1, UC7-R1)."""
 
 import re
 from pathlib import Path
@@ -10,13 +10,16 @@ import pytest
 from zabbixvms import config as config_module
 from zabbixvms.config import (
     ADDED_FIELDS,
+    DEFAULT_IPP_URL,
     DEFAULT_PERIOD,
     MAX_PERIOD,
     MIN_PERIOD,
     Config,
     ConfigError,
     DatabaseConfig,
+    ServerConfig,
     Turbine,
+    UpsConfig,
     ZabbixConfig,
     complete_config,
     config_path,
@@ -40,6 +43,11 @@ def make_config():
             Turbine(name="TG1", system_id=11, buffers=["buffer_a"]),
             Turbine(name="TG2", system_id=12, buffers=["buffer_b", "buffer_c"]),
         ],
+        server=ServerConfig(
+            host="Praha_server",
+            ups=UpsConfig(enabled=True, url="https://ipp.example.com:4680",
+                          login="monitor", password="ipp-secret"),
+        ),
     )
 
 
@@ -77,6 +85,8 @@ def test_stored_file_carries_jsonpickle_tags(tmp_path):
     assert data["zabbix"]["py/object"] == "zabbixvms.config.ZabbixConfig"
     assert data["database"]["py/object"] == "zabbixvms.config.DatabaseConfig"
     assert data["turbines"][0]["py/object"] == "zabbixvms.config.Turbine"
+    assert data["server"]["py/object"] == "zabbixvms.config.ServerConfig"
+    assert data["server"]["ups"]["py/object"] == "zabbixvms.config.UpsConfig"
 
 
 def test_turbines_do_not_share_buffers():
@@ -332,17 +342,31 @@ def store_without(path, *fields):
 
 # What a file written by the first release of the agent lacks.
 FIRST_RELEASE = [("zabbix", "period"), ("turbines", 0, "raw_prefixes"),
-                 ("turbines", 1, "raw_prefixes")]
+                 ("turbines", 1, "raw_prefixes"), ("server",)]
+
+# Where fill_missing() reports it filled in what FIRST_RELEASE takes out.
+FIRST_RELEASE_FILLED = ["zabbix.period", "turbines[0].raw_prefixes",
+                        "turbines[1].raw_prefixes", "server"]
 
 
 def test_only_fields_added_after_the_first_release_may_be_missing():
     """UC2-R9: the defaults are what a configuration without the field gets, and they
     are the values the classes themselves start with."""
-    assert ADDED_FIELDS == {ZabbixConfig: {"period": DEFAULT_PERIOD},
-                            Turbine: {"raw_prefixes": []}}
-    for kind, fields in ADDED_FIELDS.items():
-        for name, default in fields.items():
-            assert getattr(kind(), name) == default
+    assert {kind: set(fields) for kind, fields in ADDED_FIELDS.items()} == {
+        ZabbixConfig: {"period"}, Turbine: {"raw_prefixes"}, Config: {"server"}}
+    assert ADDED_FIELDS[ZabbixConfig]["period"] == DEFAULT_PERIOD == ZabbixConfig().period
+    assert ADDED_FIELDS[Turbine]["raw_prefixes"] == [] == Turbine().raw_prefixes
+
+
+def test_a_server_group_filled_in_watches_nothing():
+    """UC2-R9, UC7-R1: a configuration of an older agent has no server group; the one
+    it gets has no host and the UPS switched off, so the agent works as before."""
+    server = ADDED_FIELDS[Config]["server"]
+
+    assert isinstance(server, ServerConfig)
+    assert server.host == ""
+    assert server.ups.enabled is False
+    assert vars(server.ups) == vars(ServerConfig().ups)
 
 
 def test_fill_missing_says_what_it_filled_in(tmp_path):
@@ -352,8 +376,7 @@ def test_fill_missing_says_what_it_filled_in(tmp_path):
 
     config = Config.read(path)
 
-    assert config.fill_missing() == ["zabbix.period", "turbines[0].raw_prefixes",
-                                     "turbines[1].raw_prefixes"]
+    assert config.fill_missing() == FIRST_RELEASE_FILLED
     assert config.fill_missing() == []
 
 
@@ -376,6 +399,9 @@ def test_a_file_of_the_first_release_loads_without_being_written(tmp_path):
     (("database", "password"), "database.password"),
     (("turbines",), "turbines"),
     (("zabbix",), "zabbix"),
+    (("server", "host"), "server.host"),
+    (("server", "ups"), "server.ups"),
+    (("server", "ups", "password"), "server.ups.password"),
 ])
 def test_a_missing_field_nothing_may_stand_in_for_is_refused(tmp_path, field, named):
     """UC2-R9: a default for these would send the values of another turbine or under
@@ -414,13 +440,31 @@ def test_complete_config_writes_in_the_fields_of_a_newer_agent(tmp_path):
 
     added = complete_config(path)
 
-    assert added == ["zabbix.period", "turbines[0].raw_prefixes",
-                     "turbines[1].raw_prefixes"]
+    assert added == FIRST_RELEASE_FILLED
     stored = json.loads(path.read_text(encoding="utf-8"))
     assert stored["zabbix"]["period"] == DEFAULT_PERIOD
     # Each turbine has a list of its own, not a reference to the list of the first.
     assert [turbine["raw_prefixes"] for turbine in stored["turbines"]] == [[], []]
     assert Config.read(path).fill_missing() == []
+
+
+def test_complete_config_writes_in_a_server_group_that_watches_nothing(tmp_path):
+    """UC2-R10, UC7-R1: the operator finds the group in the file, switched off, and
+    the agent still sends nothing to a server host until it is set up."""
+    import json
+
+    path = tmp_path / "config.json"
+    store_without(path, ("server",))
+
+    assert complete_config(path) == ["server"]
+
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["server"]["py/object"] == "zabbixvms.config.ServerConfig"
+    assert stored["server"]["host"] == ""
+    assert stored["server"]["ups"] == {
+        "py/object": "zabbixvms.config.UpsConfig", "enabled": False,
+        "url": DEFAULT_IPP_URL, "login": "admin", "password": ""}
+    load_config(path)
 
 
 def test_complete_config_keeps_every_value_that_was_there(tmp_path):
@@ -500,3 +544,75 @@ def test_complete_config_works_on_the_active_configuration_by_default():
     store_without(path, ("zabbix", "period"))
 
     assert complete_config() == ["zabbix.period"]
+
+
+def test_the_server_group_survives_a_round_trip(tmp_path):
+    """UC7-R1: the host of the server and the access to IPP are stored and read back."""
+    path = tmp_path / "config.json"
+    make_config().store(path)
+
+    loaded = Config.load(path)
+
+    assert loaded.server.host == "Praha_server"
+    assert vars(loaded.server.ups) == {"enabled": True, "url": "https://ipp.example.com:4680",
+                                       "login": "monitor", "password": "ipp-secret"}
+
+
+def test_the_host_of_the_server_is_not_made_of_the_location():
+    """UC7-R1: the host of the server is set whole, independently of location."""
+    config = make_config()
+    config.zabbix.location = "Brno"
+
+    assert config.server.host == "Praha_server"
+
+
+def test_ipp_is_read_on_this_server_unless_told_otherwise():
+    """UC7-R1: IPP answers on the server itself, on the port its browser page uses."""
+    assert UpsConfig().url == DEFAULT_IPP_URL == "https://localhost:4680"
+
+
+def test_a_watched_ups_needs_a_host_of_the_server():
+    """UC7-R1: without a host the charge would have nowhere to go."""
+    config = make_config()
+    config.server.host = ""
+
+    with pytest.raises(ConfigError, match="server.host"):
+        config.validate()
+
+
+def test_a_ups_that_is_not_watched_needs_no_host():
+    """UC7-R1: the group of an older agent, filled in switched off, is valid as it is."""
+    config = make_config()
+    config.server = ServerConfig()
+
+    config.validate()
+
+
+def test_a_ipp_password_outside_ascii_is_rejected():
+    """IPP hashes the password in its own JavaScript, which agrees with SHA1 only while
+    the password is ASCII; the agent could never log in with anything else."""
+    config = make_config()
+    config.server.ups.password = "heslo-žluťoučké"
+
+    with pytest.raises(ConfigError, match="password"):
+        config.validate()
+
+
+def test_the_packaged_default_carries_a_server_group_that_watches_nothing():
+    """UC7-R1: the operator sees the group in the file that is deployed, switched off."""
+    import json
+
+    stored = json.loads(config_module.default_config_bytes())
+
+    assert stored["server"]["host"] == ""
+    assert stored["server"]["ups"]["enabled"] is False
+    assert stored["server"]["ups"]["url"] == DEFAULT_IPP_URL
+
+
+def test_a_switch_of_the_ups_that_is_not_true_or_false_is_rejected():
+    """UC7-R1: "false" in quotes would switch the UPS on."""
+    config = make_config()
+    config.server.ups.enabled = "false"
+
+    with pytest.raises(ConfigError, match="enabled"):
+        config.validate()

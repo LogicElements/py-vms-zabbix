@@ -25,5 +25,16 @@
       ],
       "raw_prefixes": []
     }
-  ]
+  ],
+  "server": {
+    "py/object": "zabbixvms.config.ServerConfig",
+    "host": "",
+    "ups": {
+      "py/object": "zabbixvms.config.UpsConfig",
+      "enabled": false,
+      "url": "https://localhost:4680",
+      "login": "admin",
+      "password": ""
+    }
+  }
 }

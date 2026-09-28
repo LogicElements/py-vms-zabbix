@@ -35,6 +35,9 @@ DEFAULT_PERIOD = 5
 MIN_PERIOD = 5
 MAX_PERIOD = 120
 
+# Eaton IPP answers on the server it runs on; plain HTTP on 4679 only redirects here.
+DEFAULT_IPP_URL = "https://localhost:4680"
+
 
 class ConfigError(Exception):
     """Configuration cannot be read or holds values outside the allowed ranges."""
@@ -95,25 +98,58 @@ class Turbine:
                 )
 
 
-# Fields that came after the first release of the agent, with the value that makes an
-# agent reading a file without them work the way the version before them did. These,
-# and only these, may be missing: any other gap is a mistake in the file, and a default
-# standing in for it - the system_id of another turbine, an empty location - would send
-# wrong values instead of refusing to start.
-ADDED_FIELDS = {
-    ZabbixConfig: {"period": DEFAULT_PERIOD},
-    Turbine: {"raw_prefixes": []},
-}
+class UpsConfig:
+    """Access to Eaton Intelligent Power Protector, which reports the UPS of the server."""
+
+    def __init__(self, enabled: bool = False, url: str = DEFAULT_IPP_URL,
+                 login: str = "admin", password: str = "") -> None:
+        self.enabled = enabled
+        # Address of the web interface of IPP, without the path of its services.
+        self.url = url
+        self.login = login
+        # Stored in plain text, like the password of the database.
+        self.password = password
+
+
+class ServerConfig:
+    """Metrics of the server as a whole, sent under a host of their own."""
+
+    def __init__(self, host: str = "", ups: UpsConfig | None = None) -> None:
+        # Whole name of the Zabbix host; unlike a turbine it is not made of location.
+        self.host = host
+        self.ups = ups if ups is not None else UpsConfig()
+
+    def validate(self) -> None:
+        """Raise ConfigError when the UPS is watched without a host to send it to, or
+        with a password IPP's login cannot take."""
+        # "false" in quotes would be true, and the UPS watched against the operator's
+        # intent.
+        if not isinstance(self.ups.enabled, bool):
+            raise ConfigError(f"server.ups.enabled is {self.ups.enabled!r}, "
+                              f"true or false is expected")
+        if not self.ups.enabled:
+            return
+        if not isinstance(self.host, str) or not self.host.strip():
+            raise ConfigError("server.host is empty, the UPS is watched only with "
+                              "a Zabbix host of the server to send it to")
+        # IPP hashes the password with its own SHA1 in JavaScript, which reads the
+        # characters of the text instead of its bytes; only for ASCII does that agree
+        # with SHA1, so any other password could never log in.
+        if not isinstance(self.ups.password, str) or not self.ups.password.isascii():
+            raise ConfigError("server.ups.password may hold ASCII characters only, "
+                              "IPP cannot take any other")
 
 
 class Config:
     """Whole agent configuration, serialized to JSON by jsonpickle."""
 
     def __init__(self, zabbix: ZabbixConfig | None = None, database: DatabaseConfig | None = None,
-                 turbines: list[Turbine] | None = None) -> None:
+                 turbines: list[Turbine] | None = None,
+                 server: ServerConfig | None = None) -> None:
         self.zabbix = zabbix if zabbix is not None else ZabbixConfig()
         self.database = database if database is not None else DatabaseConfig()
         self.turbines = list(turbines) if turbines is not None else [Turbine()]
+        self.server = server if server is not None else ServerConfig()
 
     def validate(self) -> None:
         """Raise ConfigError when the configuration is outside the allowed ranges."""
@@ -131,13 +167,23 @@ class Config:
             )
         for turbine in self.turbines:
             turbine.validate()
+        self.server.validate()
 
     def _parts(self):
-        """Every group of the configuration: where it sits and what it has to be."""
+        """Every group of the configuration: where it sits and what it has to be.
+
+        The configuration itself comes last, under an empty place: the server group it
+        may lack is only looked into once it is there.
+        """
         yield "zabbix", self.zabbix, ZabbixConfig
         yield "database", self.database, DatabaseConfig
         for index, turbine in enumerate(self.turbines):
             yield f"turbines[{index}]", turbine, Turbine
+        if hasattr(self, "server"):
+            yield "server", self.server, ServerConfig
+            if isinstance(self.server, ServerConfig) and hasattr(self.server, "ups"):
+                yield "server.ups", self.server.ups, UpsConfig
+        yield "", self, Config
 
     def missing_fields(self) -> list[str]:
         """What the configuration lacks that no default may stand in for.
@@ -145,7 +191,8 @@ class Config:
         A group that is something else than it should be counts as missing, since
         none of its fields can be read either.
         """
-        missing = [name for name in vars(Config()) if not hasattr(self, name)]
+        missing = [name for name in vars(Config())
+                   if name not in ADDED_FIELDS[Config] and not hasattr(self, name)]
         if missing:
             return missing
         if not isinstance(self.turbines, list):
@@ -155,7 +202,7 @@ class Config:
                 missing.append(place)
                 continue
             optional = ADDED_FIELDS.get(kind, {})
-            missing.extend(f"{place}.{name}" for name in vars(kind())
+            missing.extend(_place_of(place, name) for name in vars(kind())
                            if name not in optional and not hasattr(part, name))
         return missing
 
@@ -175,7 +222,7 @@ class Config:
                     # Every turbine gets a list of its own; one shared list would be
                     # written out as a reference to where it first appeared.
                     setattr(part, name, copy.deepcopy(default))
-                    filled.append(f"{place}.{name}")
+                    filled.append(_place_of(place, name))
         return filled
 
     @staticmethod
@@ -217,6 +264,24 @@ class Config:
         path = Path(path)
         jsonpickle.set_preferred_backend("json")
         path.write_text(jsonpickle.encode(self, indent=2, keys=True) + "\n", encoding="utf-8")
+
+
+# Fields that came after the first release of the agent, with the value that makes an
+# agent reading a file without them work the way the version before them did. These,
+# and only these, may be missing: any other gap is a mistake in the file, and a default
+# standing in for it - the system_id of another turbine, an empty location - would send
+# wrong values instead of refusing to start.
+ADDED_FIELDS = {
+    ZabbixConfig: {"period": DEFAULT_PERIOD},
+    Turbine: {"raw_prefixes": []},
+    # Without a host and with the UPS switched off nothing is sent to a server host.
+    Config: {"server": ServerConfig()},
+}
+
+
+def _place_of(place: str, name: str) -> str:
+    """Where a field sits, such as turbines[0].raw_prefixes, or server at the top."""
+    return f"{place}.{name}" if place else name
 
 
 def data_folder() -> Path:
