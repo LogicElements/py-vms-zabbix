@@ -32,7 +32,7 @@
 | 10 | Aktuální statistiky z information_schema | [x] |
 | 11 | Připojení bez otevřené transakce | [x] |
 | 12 | Nová tabulka surových dat bez zápisu | [x] |
-| 13 | Sledování UPS serveru | [ ] |
+| 13 | Sledování UPS serveru | [x] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -432,5 +432,6 @@ a adresy zkouší v pořadí IPv4 před IPv6: na serveru stálo každý dotaz na
 čekání na `::1`.
 
 **Ověření na serveru (verze 0.3.1, 2026-09-28):** agent se k IPP připojí a odesílá data do
-Zabbixu. Pro Hotovo u UC7-R2 zbývá potvrdit, že se `ups.charge` shoduje s nabitím ve webovém
-rozhraní IPP, a u UC7-R5, že se šablona naimportovala bez ruční úpravy souboru.
+Zabbixu, `ups.charge` se shoduje s nabitím ve webovém rozhraní IPP a soubor se dvěma
+šablonami se naimportoval bez ruční úpravy. Ruční krok 19 tím prošel, takže UC7-R2 i UC7-R5
+jsou Hotovo a etapa 13 je dokončená.

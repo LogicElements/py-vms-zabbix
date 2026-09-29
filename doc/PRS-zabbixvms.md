@@ -44,10 +44,10 @@
 | UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R5 | Nová tabulka bez zápisu se první minutu nehlásí jako zastavený zápis | Hotovo | tests/test_collector.py |
 | UC7-R1 | Skupina `server` v konfiguraci: host serveru a čtení z IPP | Hotovo | tests/test_config.py, tests/test_agent.py |
-| UC7-R2 | Nabití baterie UPS z IPP odesílané jako `ups.charge` na host serveru | Zbývá | |
+| UC7-R2 | Nabití baterie UPS z IPP odesílané jako `ups.charge` na host serveru | Hotovo | tests/test_ups.py, tests/test_agent.py |
 | UC7-R3 | Nezjištěné nabití jako chyba na hostu serveru, bez `ups.charge` | Hotovo | tests/test_ups.py, tests/test_agent.py |
 | UC7-R4 | Stav agenta na hostu serveru nezávislý na hostech turbín | Hotovo | tests/test_agent.py |
-| UC7-R5 | Samostatná šablona pro host serveru | Zbývá | |
+| UC7-R5 | Samostatná šablona pro host serveru | Hotovo | tests/test_template.py |
 | UC7-R6 | Chyba napájení při nabití pod mezí `{$VMS.UPS.CHARGE.MIN}` | Hotovo | tests/test_triggers.py, tests/test_template.py |
 | UC7-R7 | Dokumentace nasazení sledování UPS a jeho chyb | Hotovo | N/A |
 
