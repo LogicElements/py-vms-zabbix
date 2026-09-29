@@ -36,20 +36,20 @@
 | UC4-R8 | Každý dotaz agenta vidí databázi v aktuálním stavu, ne snímek otevřené transakce | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
-| UC5-R3 | Vlastní stav agenta odesílaný do Zabbixu jako dvojice metrik | Hotovo | tests/test_agent.py |
-| UC5-R4 | Value map a triggery pro hlášení chyb v šabloně | Hotovo | tests/test_template.py |
+| UC5-R3 | Vlastní stav agenta odesílaný na host serveru jako dvojice metrik | Hotovo | tests/test_agent.py |
+| UC5-R4 | Triggery turbín a value map stavu agenta v šablonách | Hotovo | tests/test_template.py, tests/test_triggers.py |
 | UC6-R1 | Seznam prefixů tabulek surových dat v konfiguraci turbíny | Hotovo | tests/test_config.py |
 | UC6-R2 | Tabulka patří k prefixu podle celého názvu `<prefix>_<datum>` | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R5 | Nová tabulka bez zápisu se první minutu nehlásí jako zastavený zápis | Hotovo | tests/test_collector.py |
-| UC7-R1 | Skupina `server` v konfiguraci: host serveru a čtení z IPP | Hotovo | tests/test_config.py, tests/test_agent.py |
+| UC7-R1 | Skupina `server` v konfiguraci: povinný host serveru a čtení z IPP | Hotovo | tests/test_config.py, tests/test_agent.py |
 | UC7-R2 | Nabití baterie UPS z IPP odesílané jako `ups.charge` na host serveru | Hotovo | tests/test_ups.py, tests/test_agent.py |
 | UC7-R3 | Nezjištěné nabití jako chyba na hostu serveru, bez `ups.charge` | Hotovo | tests/test_ups.py, tests/test_agent.py |
-| UC7-R4 | Stav agenta na hostu serveru nezávislý na hostech turbín | Hotovo | tests/test_agent.py |
+| UC7-R4 | Stav agenta na hostu serveru shrnuje čtení z databáze i z IPP | Hotovo | tests/test_agent.py |
 | UC7-R5 | Samostatná šablona pro host serveru | Hotovo | tests/test_template.py |
 | UC7-R6 | Chyba napájení při nabití pod mezí `{$VMS.UPS.CHARGE.MIN}` | Hotovo | tests/test_triggers.py, tests/test_template.py |
-| UC7-R7 | Dokumentace nasazení sledování UPS a jeho chyb | Hotovo | N/A |
+| UC7-R7 | Dokumentace nasazení hostu serveru, sledování UPS a jeho chyb | Hotovo | N/A |
 
 ## Účel projektu
 
@@ -209,6 +209,7 @@ nastavit.
 **DoD:**
 - Položky přidané po první verzi agenta, tedy `period` ve skupině odesílání do Zabbixu, `raw_prefixes` u turbíny a skupina `server` (UC7-R1), se při načtení konfigurace, která je nemá, doplní hodnotou, se kterou agent pracuje stejně jako verze, která je neznala: 5 sekund, prázdný seznam a skupina `server` s vypnutým sledováním UPS.
 - Konfiguraci, ve které chybí jiná položka, například `system_id` turbíny nebo `location`, agent odmítne jako neplatnou a v chybě uvede, která položka chybí.
+- Chybějící skupina `server` a skupina s prázdným `host` dostanou `host` složený z `location` a `_server`, například `Praha_server`; `host` s vyplněným jménem se nemění.
 - Doplnění probíhá jen v paměti, soubor konfigurace se jím nezmění (UC2-R4).
 
 ### UC2-R10
@@ -242,9 +243,8 @@ Sada metrik odesílaných do Zabbixu:
 | `vms.buf_bulk` | Doba bulk zápisu | Numeric (unsigned) | ms | Součet doby zápisu bulk příkazů do databáze přes buffery turbíny |
 | `vms.raw_tables` | Počet tabulek surových dat | Numeric (unsigned) | | Největší počet tabulek surových dat se stejným prefixem přes prefixy turbíny |
 | `vms.raw_write_age` | Stáří zápisu surových dat | Numeric (unsigned) | s | Doba od posledního zápisu do nejnovější tabulky surových dat u toho prefixu turbíny, který je na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
-| `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`. |
-| `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku. |
 
+Stav agenta se na hosty turbín neodesílá; nese ho host serveru (UC7).
 
 ### UC3-R1
 **Popis:** Sada metrik, které agent odesílá do Zabbixu, je vedená jako tabulka v této PRS.
@@ -298,8 +298,6 @@ hodnoty metrik a odešle je do Zabbixu. Zdroj každé metriky určuje tabulka n�
 | `vms.buf_rows` | `information_schema.TABLES` | `database`, bufferové tabulky turbíny | `TABLE_ROWS` | součet hodnot přes nastavené buffery |
 | `vms.raw_tables` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME` | počet tabulek každého prefixu (UC6-R2), největší z nich |
 | `vms.raw_write_age` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME`, `UPDATE_TIME`, `CREATE_TIME` | stáří `UPDATE_TIME` nejnovější tabulky každého prefixu, u nové tabulky bez zápisu první minutu stáří `CREATE_TIME` (UC6-R5), největší z nich |
-| `vms.agent_status` | vlastní stav agenta | – | – | 0, 1 nebo 2 podle průběhu cyklu |
-| `vms.agent_error` | vlastní stav agenta | – | – | text poslední chyby, jinak prázdný řetězec |
 
 ### UC4-R1
 **Popis:** Zdroj hodnoty každé metriky je popsaný tabulkou zdrojů v tomto use casu.
@@ -386,15 +384,16 @@ logovacího souboru a ty zásadní i do Windows Event Logu.
 - Běžné provozní záznamy se do Event Logu nezapisují; ty zůstávají jen v logovacím souboru.
 
 ### UC5-R3
-**Popis:** Agent odesílá svůj vlastní stav do Zabbixu jako dvojici metrik.
+**Popis:** Agent odesílá svůj vlastní stav do Zabbixu jako dvojici metrik na host serveru.
 **DoD:**
-- V každém cyklu odešle agent `vms.agent_status` a `vms.agent_error` na každý host turbíny, kterou má v konfiguraci.
-- `vms.agent_status` má hodnotu 0, proběhl-li celý cyklus bez chyby, 1 při varování, po kterém agent pokračuje, a 2 při chybě, která mu brání získat hodnoty metrik nebo kvůli které je Zabbix odmítne.
+- V každém cyklu odešle agent `vms.agent_status` a `vms.agent_error` na host serveru z konfigurace (`server.host`), i když je sledování UPS vypnuté; na hosty turbín je neodesílá.
+- Stav shrnuje celý cyklus, tedy čtení z databáze i z IPP (UC7): `vms.agent_status` má hodnotu 0, proběhl-li celý cyklus bez chyby, 1 při varování, po kterém agent pokračuje, a 2 při chybě, která mu brání získat hodnoty metrik nebo kvůli které je Zabbix odmítne. Při více problémech v jednom cyklu je stav nejhorší z nich.
 - Nedostupnost Zabbix serveru se do metrik nehlásí vůbec: hlášení by k němu dorazilo až po obnovení spojení, kdy už popisuje něco, co skončilo. Agent takový cyklus přejde a po pěti neúspěšných cyklech za sebou o tom napíše do logu; v Zabbixu se výpadek pozná chybějícími daty.
-- `vms.agent_error` nese text poslední chyby nebo varování; při stavu 0 je prázdný.
-- Text chyby odpovídá záznamu v logovacím souboru a zkracuje se na 255 znaků, aby se vešel do položky typu Character.
+- `vms.agent_error` nese text poslední chyby nebo varování, při více problémech jsou texty spojené středníkem; při stavu 0 je prázdný.
+- Text chyby nebo varování, který se týká konkrétní turbíny, začíná jejím názvem (`<název turbíny>: <text>`); text chyby, která se žádné turbíny netýká (spojení s databází, IPP), název turbíny neobsahuje.
+- Text odpovídá záznamu v logovacím souboru a zkracuje se na 255 znaků, aby se vešel do položky typu Character.
 
-Sada triggerů, které šablona obsahuje:
+Sada triggerů, které šablona turbín obsahuje:
 
 | Název triggeru | Klíč metriky | Podmínka | Priorita | Závisí na |
 | --- | --- | --- | --- | --- |
@@ -406,9 +405,7 @@ Sada triggerů, které šablona obsahuje:
 | Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Chyba exportu surových dat: {ITEM.VALUE} | `vms.raw_tables` | `last({METRIC})>2` | HIGH | – |
 | Chyba zápisu surových dat: {ITEM.VALUE} | `vms.raw_write_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
-| Agent hlásí chybu nebo varování | `vms.agent_status` | `last({METRIC})>0` | WARNING | – |
-| Z hostu nepřišla žádná hodnota 5m | `vms.agent_status` | `nodata({METRIC},5m)=1` | HIGH | – |
-| Chyba agenta: {ITEM.VALUE} | `vms.agent_error` | `length(last({METRIC}))>0` | AVERAGE | – |
+| Z hostu nepřišla žádná hodnota 5m | `vms.speed` | `nodata({METRIC},5m)=1` | HIGH | – |
 
 `{METRIC}` v podmínce zastupuje odkaz na metriku ve tvaru `/<název šablony>/<klíč metriky>`.
 Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
@@ -431,15 +428,15 @@ Makro jde přepsat na hostu, takže turbína s jinými nominálními otáčkami 
 šablonu.
 
 ### UC5-R4
-**Popis:** Šablona pro Zabbix obsahuje mapování stavů a triggery vedené jako tabulka v této PRS.
+**Popis:** Šablona turbín obsahuje triggery vedené jako tabulka v této PRS a šablona serveru value map stavu agenta.
 **DoD:**
-- Šablona obsahuje value map, která u `vms.agent_status` překládá hodnoty 0, 1 a 2 na text.
-- Šablona obsahuje právě triggery z tabulky výše – žádný navíc a žádný nevynechává.
+- Šablona serveru obsahuje value map, která u `vms.agent_status` překládá hodnoty 0, 1 a 2 na text; šablona turbín value map neobsahuje.
+- Šablona turbín obsahuje právě triggery z tabulky výše – žádný navíc a žádný nevynechává.
 - Každý trigger má název, podmínku a prioritu podle svého řádku tabulky.
 - Trigger, který má v tabulce vyplněný sloupec Závisí na, je v exportu závislý na triggeru toho jména, takže se neuplatní, dokud je blokující trigger v problémovém stavu.
 - Šablona obsahuje makra z tabulky maker i s výchozími hodnotami a každé makro použité v podmínce triggeru je v ní deklarované.
 - Každý trigger se odkazuje na klíč metriky, který je v tabulce metrik v UC3.
-- Tabulka obsahuje trigger na stav agenta, trigger na neprázdný `vms.agent_error` s textem chyby ve jméně a trigger na to, že na host nedorazila žádná hodnota po dobu 5 minut; ten pokrývá i případ, kdy agent neběží nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.
+- Tabulka obsahuje trigger na to, že na host turbíny nedorazila hodnota `vms.speed` po dobu 5 minut; ten pokrývá i případ, kdy agent neběží, databáze je nedostupná nebo je Zabbix nedostupný a žádnou metriku odeslat nelze.
 
 ## UC6 – Sledování ukládání surových dat VMS a TVMS
 
@@ -515,15 +512,16 @@ Servery napájí UPS Eaton, kterou spravuje Eaton Intelligent Power Protector (I
 k IPP připojená přes USB nebo po síti; IPP obě připojení vystavuje stejně ve svém webovém
 rozhraní na serveru. Agent se k tomuto rozhraní přihlásí stejně jako prohlížeč, přečte
 nabití baterie a odešle ho na host serveru. Host serveru nese metriky společné celému
-serveru, ne jedné turbíně; UPS je první z nich a další mohou přibýt vedle ní.
+serveru, ne jedné turbíně; UPS je první z nich a další mohou přibýt vedle ní. Nese také stav
+agenta (UC5-R3), a proto existuje na každé instalaci, i když se UPS nesleduje.
 
 Sada metrik odesílaných na host serveru:
 
 | Klíč | Název | Typ hodnoty | Jednotka | Popis |
 | --- | --- | --- | --- | --- |
 | `ups.charge` | Nabití baterie UPS | Numeric (unsigned) | % | Nabití baterie UPS podle IPP; při více UPS nejnižší z nich |
-| `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = serverové metriky přečtené bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`. |
-| `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování při čtení serverových metrik; prázdný, když je vše v pořádku. |
+| `vms.agent_status` | Stav agenta | Numeric (unsigned) | | 0 = cyklus proběhl bez chyby, 1 = varování, 2 = chyba při čtení z databáze nebo z IPP. Popis chyby nese `vms.agent_error`. |
+| `vms.agent_error` | Poslední chyba agenta | Character | | Text poslední chyby nebo varování agenta, u turbíny s jejím názvem na začátku; prázdný, když je vše v pořádku. |
 
 | Klíč metriky | Zdroj | Pole zdroje | Výpočet |
 | --- | --- | --- | --- |
@@ -549,9 +547,9 @@ Makra šablony serveru:
 **DoD:**
 - Skupina `server` obsahuje `host` – celý název hostu serveru v Zabbixu; neskládá se z `location` a nastavuje se nezávisle na něm.
 - Podskupina `ups` obsahuje `enabled`, adresu webového rozhraní IPP `url` s výchozí hodnotou `https://localhost:4680`, uživatelské jméno `login` a heslo `password` v otevřené podobě.
-- Při `enabled: false` agent IPP nečte a na host serveru nic neodesílá.
-- Konfiguraci se zapnutým sledováním UPS a prázdným `host` agent odmítne jako neplatnou.
-- Chybějící skupina `server` se doplní podle UC2-R9 s prázdným `host` a vypnutým sledováním UPS, takže konfigurace starší verze zůstává platná a pracuje beze změny.
+- Při `enabled: false` agent IPP nečte a `ups.charge` neodesílá; stav agenta (UC5-R3) na host serveru odesílá dál.
+- Konfiguraci, jejíž `host` zůstal i po doplnění podle UC2-R9 prázdný, agent odmítne jako neplatnou bez ohledu na to, je-li sledování UPS zapnuté, protože host serveru nese stav agenta.
+- Chybějící skupina `server` se doplní podle UC2-R9 s vypnutým sledováním UPS a s `host` složeným z `location` a `_server`; totéž dostane skupina z verze 0.3.x s prázdným `host`.
 
 ### UC7-R2
 **Popis:** Agent v každém cyklu přečte z IPP nabití baterie UPS a odešle ho jako `ups.charge` na host serveru.
@@ -567,23 +565,24 @@ Makra šablony serveru:
 **Popis:** Když agent nabití z IPP nezjistí, ohlásí na hostu serveru chybu a `ups.charge` neodešle.
 **DoD:**
 - Chybou je nedostupné rozhraní IPP, odmítnuté přihlášení, odpověď v neočekávaném tvaru, IPP bez uzlu UPS a uzel UPS s `System.CommunicationLost` rovným 1.
-- Při chybě odešle agent na host serveru `vms.agent_status` 2 a `vms.agent_error` s popisem chyby podle UC5-R3; `ups.charge` v tomto cyklu neodešle.
+- Při chybě odešle agent na host serveru `vms.agent_status` 2 a `vms.agent_error` s popisem chyby podle UC5-R3, bez názvu turbíny; `ups.charge` v tomto cyklu neodešle.
 - Chyba se zapíše do logovacího souboru podle UC5-R1.
 - Po odstranění příčiny začne agent v nejbližším cyklu `ups.charge` znovu odesílat bez restartu služby.
 
 ### UC7-R4
-**Popis:** Stav agenta hlásí host serveru nezávisle na hostech turbín.
+**Popis:** Stav agenta na hostu serveru shrnuje čtení z databáze i z IPP a jedno neblokuje druhé.
 **DoD:**
-- `vms.agent_status` a `vms.agent_error` hostu serveru popisují jen čtení serverových metrik; hosty turbín popisují dál jen čtení z databáze podle UC5-R3.
-- Chyba při čtení z IPP nezmění stav hlášený na hosty turbín a nezastaví odesílání jejich metrik.
-- Nedostupná databáze nezmění stav hlášený na host serveru a nezastaví odesílání `ups.charge`.
-- Nedostupnost Zabbix serveru se na host serveru nehlásí, stejně jako u turbín podle UC5-R3.
+- `vms.agent_status` a `vms.agent_error` hostu serveru popisují čtení turbín z databáze i čtení serverových metrik z IPP podle UC5-R3.
+- Chyba při čtení z IPP nezastaví odesílání metrik turbín.
+- Nedostupná databáze nezastaví odesílání `ups.charge`.
+- Chyby obou zdrojů v jednom cyklu se v textu `vms.agent_error` objeví společně.
+- Nedostupnost Zabbix serveru se na host serveru nehlásí, stejně jako podle UC5-R3.
 
 ### UC7-R5
 **Popis:** Balíček obsahuje samostatnou šablonu pro host serveru podle tabulek tohoto use casu.
 **DoD:**
 - Soubor šablony z UC3-R4 obsahuje vedle šablony turbín druhou šablonu „VMS zabbix agent server", která se naimportuje bez ruční úpravy souboru.
-- Šablona serveru obsahuje právě metriky, triggery a makra z tabulek tohoto use casu, se stejnými pravidly jako v UC3-R4 a UC5-R4.
+- Šablona serveru obsahuje právě metriky, triggery a makra z tabulek tohoto use casu, se stejnými pravidly jako v UC3-R4 a UC5-R4, a value map stavu agenta.
 - Šablona turbín se přidáním šablony serveru nemění.
 
 ### UC7-R6
@@ -597,5 +596,6 @@ Makra šablony serveru:
 **Popis:** Dokumentace popisuje nasazení sledování UPS a chyby, které při něm agent hlásí.
 **DoD:**
 - Návod k nastavení Zabbixu popisuje založení hostu serveru, přiřazení šablony serveru a mez nabití `{$VMS.UPS.CHARGE.MIN}`.
+- Návod říká, že host serveru je povinný i bez sledování UPS, protože nese stav agenta včetně chyb čtení z databáze.
 - Návod popisuje, co obsluha nastaví ve skupině `server` konfigurace, aby agent začal UPS sledovat.
 - Popis chyb agenta uvádí chyby podle UC7-R3 a kde k nim hledat podrobnosti.

@@ -33,6 +33,7 @@
 | 11 | Připojení bez otevřené transakce | [x] |
 | 12 | Nová tabulka surových dat bez zápisu | [x] |
 | 13 | Sledování UPS serveru | [x] |
+| 14 | Stav agenta jen na hostu serveru | [x] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -435,3 +436,33 @@ a adresy zkouší v pořadí IPv4 před IPv6: na serveru stálo každý dotaz na
 Zabbixu, `ups.charge` se shoduje s nabitím ve webovém rozhraní IPP a soubor se dvěma
 šablonami se naimportoval bez ruční úpravy. Ruční krok 19 tím prošel, takže UC7-R2 i UC7-R5
 jsou Hotovo a etapa 13 je dokončená.
+
+### Etapa 14 – Stav agenta jen na hostu serveru
+**Účel:** Přesunout `vms.agent_status` a `vms.agent_error` z hostů turbín na host serveru a nahradit trigger na chybějící data.
+**Řeší:** UC3-R1, UC3-R4, UC4-R1, UC5-R3, UC5-R4, UC7-R1, UC7-R4, UC7-R5, UC7-R7
+**Kroky:**
+1. Odebrat z `metrics.py` obě metriky a tři agentní triggery ze sady turbín, ponechat je v sadě serveru; přidat trigger `Z hostu nepřišla žádná hodnota 5m` s `nodata` na `vms.speed`, priorita HIGH.
+2. Vyžadovat v `Config.validate()` neprázdný `server.host` bez ohledu na `server.ups.enabled`, s hláškou o chybějícím hostu serveru; upravit doplňování skupiny `server` a `data/config_default.json`.
+3. Napsat testy konfigurace: odmítnutí prázdného `host` při vypnutém i zapnutém UPS, odmítnutí konfigurace bez skupiny `server`.
+4. Sloučit v `agent.py` stav turbín a serveru do jednoho stavu cyklu (nejhorší z nich, texty spojené středníkem) a odesílat ho jen na `server.host`, i při vypnutém UPS; nedostupný Zabbix dál nehlásit.
+5. Předřadit textům chyb a varování týkajícím se turbíny její název (`<název turbíny>: <text>`), chyby spojení s databází a IPP nechat bez názvu; text zkrátit na 255 znaků a shodně zalogovat.
+6. Zachytit v `agent.py` výjimku čtení jedné turbíny s jejím názvem, aby ho text chyby podle kroku 5 obsahoval.
+7. Napsat testy agenta: stav se posílá jen na host serveru a ne na hosty turbín, posílá se i při vypnutém UPS, nejhorší stav z DB a IPP, texty obou chyb společně, název turbíny v textu a jeho absence u chyby DB a IPP, zkrácení na 255 znaků, chyba IPP nezastaví odeslání turbín a chyba DB nezastaví `ups.charge`.
+8. Odebrat v `template.py` z šablony turbín položky obou metrik, jejich triggery a value map; přidat trigger na `vms.speed`; šablonu serveru ponechat a přegenerovat `data/zabbix_template.yaml`.
+9. Upravit testy katalogu, triggerů a šablon: klíče turbín a serveru odpovídají tabulkám v PRS, šablona turbín neobsahuje agentní metriky ani value map, šablona serveru obsahuje value map, právě triggery z tabulek, trigger `nodata` na `vms.speed`.
+10. Doplnit `NAVOD-zabbix.md` o povinný host serveru i bez UPS a o nový trigger; upravit `CHYBY-agenta.md` (stav agenta na hostu serveru, název turbíny v textu) a `NAVRH-zabbixvms.md`.
+11. Zvýšit verzi balíčku na 0.4.0, sestavit balíček podle kapitoly Build v `CLAUDE.md` a zkontrolovat složku `offline`.
+12. Ručně ověřit na serveru po importu obou šablon: stav agenta chodí jen na host serveru, po zastavení databáze se na něm ohlásí chyba s názvem turbíny a na hostu turbíny po 5 minutách bez `vms.speed` naskočí trigger `Z hostu nepřišla žádná hodnota 5m`.
+
+**Stav:** kroky 1 až 11 hotové, testy prošly (425), balíček 0.4.1 je sestavený a v `offline` je
+jediný wheel. UC3-R1, UC4-R1, UC5-R3, UC5-R4, UC7-R1, UC7-R4 a UC7-R7 jsou Hotovo. Zbývá
+ruční krok 12 na serveru: UC3-R4 a UC7-R5 čekají na to, že se soubor se dvěma šablonami
+naimportuje bez ruční úpravy. Při importu nad verzí 0.3.x je potřeba zaškrtnout
+**Delete missing**, jinak na hostech turbín zůstanou staré položky stavu agenta a trigger
+na ně; upozorňuje na to `NAVOD-zabbix.md`. `complete-config` a načtení konfigurace doplní
+chybějící nebo prázdný `server.host` jako `<location>_server`; jméno je třeba na serveru
+zkontrolovat proti hostu v Zabbixu.
+
+**Ověření na serverech (verze 0.4.1):** balíček se nasadil na všechny servery, obě šablony se
+naimportovaly do Zabbixu a vše funguje. Ruční krok 12 tím prošel, takže UC3-R4 i UC7-R5 jsou
+Hotovo a etapa 14 je dokončená.

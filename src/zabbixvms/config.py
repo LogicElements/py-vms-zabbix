@@ -120,8 +120,13 @@ class ServerConfig:
         self.ups = ups if ups is not None else UpsConfig()
 
     def validate(self) -> None:
-        """Raise ConfigError when the UPS is watched without a host to send it to, or
-        with a password IPP's login cannot take."""
+        """Raise ConfigError when there is no host of the server to report the state of
+        the agent to, or when the UPS is watched with a password IPP's login cannot
+        take."""
+        # The host of the server carries the state of the agent, watched UPS or not.
+        if not isinstance(self.host, str) or not self.host.strip():
+            raise ConfigError("server.host is empty, the state of the agent is sent "
+                              "to a Zabbix host of the server")
         # "false" in quotes would be true, and the UPS watched against the operator's
         # intent.
         if not isinstance(self.ups.enabled, bool):
@@ -129,9 +134,6 @@ class ServerConfig:
                               f"true or false is expected")
         if not self.ups.enabled:
             return
-        if not isinstance(self.host, str) or not self.host.strip():
-            raise ConfigError("server.host is empty, the UPS is watched only with "
-                              "a Zabbix host of the server to send it to")
         # IPP hashes the password with its own SHA1 in JavaScript, which reads the
         # characters of the text instead of its bytes; only for ASCII does that agree
         # with SHA1, so any other password could never log in.
@@ -223,7 +225,27 @@ class Config:
                     # written out as a reference to where it first appeared.
                     setattr(part, name, copy.deepcopy(default))
                     filled.append(_place_of(place, name))
+        filled.extend(self._fill_server_host(filled))
         return filled
+
+    def _fill_server_host(self, filled: list[str]) -> list[str]:
+        """Name the host of the server after the location when nobody has named it.
+
+        An agent before 0.4.0 needed no host of the server, so its configuration has
+        none: the group is missing or holds an empty host. The name every installation
+        uses, the location and "server" joined by an underscore, is the one to fill in;
+        a host of another name is the operator's to write.
+        """
+        server = getattr(self, "server", None)
+        location = getattr(getattr(self, "zabbix", None), "location", None)
+        if not isinstance(server, ServerConfig) or not isinstance(location, str) \
+                or not location.strip():
+            return []
+        if isinstance(server.host, str) and server.host.strip():
+            return []
+        server.host = f"{location}_server"
+        # A group filled in as a whole has already been reported as such.
+        return [] if "server" in filled else ["server.host"]
 
     @staticmethod
     def read(path: os.PathLike | str) -> "Config":
@@ -274,7 +296,8 @@ class Config:
 ADDED_FIELDS = {
     ZabbixConfig: {"period": DEFAULT_PERIOD},
     Turbine: {"raw_prefixes": []},
-    # Without a host and with the UPS switched off nothing is sent to a server host.
+    # The empty host in it is replaced by Config.fill_missing() with the name made of
+    # the location; validate() refuses a host that is still empty.
     Config: {"server": ServerConfig()},
 }
 

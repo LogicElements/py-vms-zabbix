@@ -90,10 +90,26 @@ def test_the_placeholder_becomes_the_reference_to_the_metric():
     assert f"/{TEMPLATE_NAME}/{trigger.key}" in expression
 
 
-def test_the_table_holds_the_three_triggers_the_dod_names():
-    """UC5-R4: state of the agent, its error text, and a host that says nothing."""
+def test_the_turbine_is_watched_for_silence_on_its_speed():
+    """UC5-R4: a turbine host that gets no speed for five minutes is a problem, which
+    covers an agent that is down as well as a database that cannot be read."""
+    silence = [trigger for trigger in TRIGGERS if trigger.condition.startswith("nodata(")]
+
+    assert [(t.key, t.condition, t.priority) for t in silence] == \
+        [("vms.speed", "nodata({METRIC},5m)=1", "HIGH")]
+    assert silence[0].name == "Z hostu nepřišla žádná hodnota 5m"
+
+
+def test_the_state_of_the_agent_is_not_watched_on_a_turbine():
+    """UC5-R4: the state is reported to the host of the server, so no trigger of a
+    turbine reads it."""
+    assert not [trigger for trigger in TRIGGERS if trigger.key in metrics.AGENT_KEYS]
+
+
+def test_the_server_holds_the_three_triggers_on_the_state_of_the_agent():
+    """UC5-R4, UC7-R5: state of the agent, its error text, and a host that says nothing."""
     by_key = {}
-    for trigger in TRIGGERS:
+    for trigger in metrics.SERVER_TRIGGERS:
         by_key.setdefault(trigger.key, []).append(trigger)
 
     conditions = [t.condition for t in by_key["vms.agent_status"]]
@@ -162,10 +178,11 @@ def test_every_macro_a_condition_uses_is_declared():
 def test_the_state_trigger_stays_under_the_mail_threshold():
     """Mail goes out from AVERAGE up, and the trigger on vms.agent_error fires together
     with this one and carries the text, so both above the threshold would mail twice."""
-    state = next(trigger for trigger in TRIGGERS
+    state = next(trigger for trigger in metrics.SERVER_TRIGGERS
                  if trigger.key == "vms.agent_status"
                  and trigger.condition.startswith("last("))
-    text = next(trigger for trigger in TRIGGERS if trigger.key == "vms.agent_error")
+    text = next(trigger for trigger in metrics.SERVER_TRIGGERS
+                if trigger.key == "vms.agent_error")
 
     assert state.priority == "WARNING"
     assert text.priority == "AVERAGE"
@@ -236,11 +253,10 @@ def test_the_power_fails_below_the_macro_and_not_at_it():
     assert trigger.priority == "HIGH"
 
 
-def test_the_server_is_watched_for_silence_like_a_turbine():
-    """UC7-R4: the triggers on the state of the agent are the same on both hosts."""
-    agent_triggers = [trigger for trigger in TRIGGERS
-                      if trigger.key in metrics.AGENT_KEYS]
-    server_agent_triggers = [trigger for trigger in metrics.SERVER_TRIGGERS
-                             if trigger.key in metrics.AGENT_KEYS]
+def test_the_server_is_watched_for_silence_on_the_state_of_the_agent():
+    """UC7-R4: the agent reports every cycle, so a server host that hears nothing for
+    five minutes means the agent is not running."""
+    silence = [trigger for trigger in metrics.SERVER_TRIGGERS
+               if trigger.condition.startswith("nodata(")]
 
-    assert server_agent_triggers == agent_triggers
+    assert [(t.key, t.priority) for t in silence] == [("vms.agent_status", "HIGH")]

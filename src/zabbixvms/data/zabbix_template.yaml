@@ -23,6 +23,10 @@ zabbix_export:
         expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
         name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
         priority: AVERAGE
+      - uuid: 48d354cdca704ebf9675ac2db4d8959a
+        expression: nodata(/VMS zabbix agent/vms.speed,5m)=1
+        name: Z hostu nepřišla žádná hodnota 5m
+        priority: HIGH
     - uuid: 3a84f34e1bf443d2a5db342cb44d793a
       name: Stáří info záznamu
       type: TRAP
@@ -123,48 +127,10 @@ zabbix_export:
         dependencies:
         - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
           expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
-    - uuid: aceaa39a77be47c5acfe687fdc0cfdef
-      name: Stav agenta
-      type: TRAP
-      key: vms.agent_status
-      value_type: UNSIGNED
-      description: 0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. Popis chyby nese `vms.agent_error`.
-      valuemap:
-        name: Stav agenta
-      triggers:
-      - uuid: 4839d6403cb443ca8ec1ea4948914e0a
-        expression: last(/VMS zabbix agent/vms.agent_status)>0
-        name: Agent hlásí chybu nebo varování
-        priority: WARNING
-      - uuid: e03c986615a04339a63b8f99f03e7c24
-        expression: nodata(/VMS zabbix agent/vms.agent_status,5m)=1
-        name: Z hostu nepřišla žádná hodnota 5m
-        priority: HIGH
-    - uuid: 2a536152869e42d39c0b77a952ca8b84
-      name: Poslední chyba agenta
-      type: TRAP
-      key: vms.agent_error
-      value_type: CHAR
-      description: Text poslední chyby nebo varování agenta; prázdný, když je vše v pořádku.
-      triggers:
-      - uuid: 04c99cd5862446d195346cbd5a26b96d
-        expression: length(last(/VMS zabbix agent/vms.agent_error))>0
-        name: 'Chyba agenta: {ITEM.VALUE}'
-        priority: AVERAGE
     macros:
     - macro: '{$VMS.SPEED.NOMINAL}'
       value: '2500'
       description: Otáčky, pod kterými se turbína nepovažuje za běžící.
-    valuemaps:
-    - uuid: 7508a404e6db427c9cb2fcaca34c537c
-      name: Stav agenta
-      mappings:
-      - value: '0'
-        newvalue: Bez chyby
-      - value: '1'
-        newvalue: Varování
-      - value: '2'
-        newvalue: Chyba
   - uuid: 4af269e3ccbc4b0086d7c51ae3026371
     template: VMS zabbix agent server
     name: VMS zabbix agent server
@@ -189,8 +155,8 @@ zabbix_export:
       type: TRAP
       key: vms.agent_status
       value_type: UNSIGNED
-      description: 0 = serverové metriky přečtené bez chyby, 1 = varování, 2 = chyba. Popis chyby nese
-        `vms.agent_error`.
+      description: 0 = cyklus proběhl bez chyby, 1 = varování, 2 = chyba při čtení z databáze nebo z IPP.
+        Popis chyby nese `vms.agent_error`.
       valuemap:
         name: Stav agenta
       triggers:
@@ -207,8 +173,8 @@ zabbix_export:
       type: TRAP
       key: vms.agent_error
       value_type: CHAR
-      description: Text poslední chyby nebo varování při čtení serverových metrik; prázdný, když je vše
-        v pořádku.
+      description: Text poslední chyby nebo varování agenta, u turbíny s jejím názvem na začátku; prázdný,
+        když je vše v pořádku.
       triggers:
       - uuid: 628a74ded23249c9a15d34c120e0f527
         expression: length(last(/VMS zabbix agent server/vms.agent_error))>0

@@ -1,6 +1,7 @@
 """Tests of the measurement loop against faked objects: every turbine of the
 configuration, the delay between cycles, surviving a failed cycle and the host of the
-server beside the turbines (UC1-R4, UC4-R6, UC5-R3, UC7-R2, UC7-R3, UC7-R4)."""
+server, which gets the state of the agent besides the charge of the UPS (UC1-R4,
+UC4-R6, UC5-R3, UC7-R2, UC7-R3, UC7-R4)."""
 
 import logging
 
@@ -26,9 +27,10 @@ from zabbixvms.ups import IppClient, IppError
 
 
 class FakeCollector:
-    def __init__(self, values=None, fail_on=(), warnings=()):
+    def __init__(self, values=None, fail_on=(), warnings=(), connect_fails=False):
         self.values = values if values is not None else {"vms.speed": 1.0}
         self.fail_on = set(fail_on)
+        self.connect_fails = connect_fails
         self.warnings = list(warnings)
         self._warn = list(warnings)
         self.collected = []
@@ -39,6 +41,8 @@ class FakeCollector:
 
     def connect(self):
         self.connects += 1
+        if self.connect_fails:
+            raise RuntimeError("cannot connect to the database")
         self.is_connected = True
 
     def close(self):
@@ -86,11 +90,7 @@ class FakeSender:
             raise SenderError("Zabbix rejected 1 of 1 values of host Praha_server")
 
     def send(self, turbine, values):
-        if STATUS_KEY in values:
-            self.states.append((turbine.name, values))
-            if self.fail_state:
-                raise RuntimeError("Zabbix is away")
-            return
+        assert STATUS_KEY not in values, "the state of the agent belongs to the server host"
         self.sent.append((turbine.name, values))
         if len(self.sent) in self.unreachable_on:
             raise ZabbixUnreachable(
@@ -133,7 +133,7 @@ def make_agent(turbines=None, collector=None, sender=None, cycles=2, ups=None,
     config = Config(
         zabbix=ZabbixConfig(location="Praha"),
         turbines=turbines if turbines is not None else [Turbine(name="TG1", system_id=11)],
-        server=server,
+        server=server if server is not None else ServerConfig(host="Praha_server"),
     )
     holder = []
     clock = FakeClock(holder, cycles=cycles)
@@ -190,7 +190,8 @@ def test_loop_waits_five_seconds_between_cycles():
 def test_loop_waits_what_the_configuration_says():
     """UC4-R6: the period comes from the configuration, not from a constant."""
     config = Config(zabbix=ZabbixConfig(location="Praha", period=45),
-                    turbines=[Turbine(name="TG1", system_id=11)])
+                    turbines=[Turbine(name="TG1", system_id=11)],
+                    server=ServerConfig(host="Praha_server"))
     holder = []
     clock = FakeClock(holder, cycles=2)
     agent = Agent(config, collector=FakeCollector(), sender=FakeSender(), sleep=clock)
@@ -290,17 +291,33 @@ def test_cycle_error_reaches_the_caller():
         agent.cycle()
 
 
-def test_state_is_sent_to_every_turbine_every_cycle():
-    """UC5-R3: both state metrics go to the host of every turbine, each cycle."""
+def test_state_is_sent_once_per_cycle_to_the_host_of_the_server():
+    """UC5-R3: both state metrics go to the host of the server, once each cycle however
+    many turbines there are, and to no turbine."""
     turbines = [Turbine(name="TG1", system_id=11), Turbine(name="TG2", system_id=12)]
     sender = FakeSender()
     agent, _ = make_agent(turbines, sender=sender, cycles=2)
 
     agent.run()
 
-    assert [name for name, _ in sender.states] == ["TG1", "TG2", "TG1", "TG2"]
-    for _, values in sender.states:
+    assert [host for host, _ in sender.server_states] == ["Praha_server"] * 2
+    for _, values in sender.server_states:
         assert set(values) == {STATUS_KEY, ERROR_KEY}
+    assert [name for name, _ in sender.sent] == ["TG1", "TG2", "TG1", "TG2"]
+
+
+def test_state_is_sent_although_the_ups_is_not_watched():
+    """UC5-R3, UC7-R1: the state does not depend on the UPS being switched on."""
+    sender = FakeSender()
+    ups = FakeUps()
+    agent, _ = make_agent(sender=sender, ups=ups, server=ServerConfig(host="Praha_server"),
+                          cycles=2)
+
+    agent.run()
+
+    assert ups.reads == 0
+    assert sender.server_sent == []
+    assert sender.server_states == [("Praha_server", {STATUS_KEY: OK, ERROR_KEY: ""})] * 2
 
 
 def test_clean_cycle_reports_zero_and_no_text():
@@ -311,7 +328,7 @@ def test_clean_cycle_reports_zero_and_no_text():
     agent.run()
 
     assert agent.status == OK
-    assert sender.states[0][1] == {STATUS_KEY: OK, ERROR_KEY: ""}
+    assert sender.server_states[0][1] == {STATUS_KEY: OK, ERROR_KEY: ""}
 
 
 def test_warning_reports_one_and_its_text():
@@ -323,8 +340,9 @@ def test_warning_reports_one_and_its_text():
     agent.run()
 
     assert agent.status == WARNING
-    assert sender.states[0][1][STATUS_KEY] == WARNING
-    assert "buffer_le" in sender.states[0][1][ERROR_KEY]
+    assert sender.server_states[0][1][STATUS_KEY] == WARNING
+    assert sender.server_states[0][1][ERROR_KEY].startswith("TG1: ")
+    assert "buffer_le" in sender.server_states[0][1][ERROR_KEY]
 
 
 def test_failed_cycle_reports_two_and_the_error():
@@ -336,8 +354,32 @@ def test_failed_cycle_reports_two_and_the_error():
     agent.run()
 
     assert agent.status == ERROR
-    assert sender.states[0][1][STATUS_KEY] == ERROR
-    assert "database is away" in sender.states[0][1][ERROR_KEY]
+    assert sender.server_states[0][1][STATUS_KEY] == ERROR
+    assert sender.server_states[0][1][ERROR_KEY] == "TG1: database is away"
+
+
+def test_an_error_names_the_turbine_it_happened_at():
+    """UC5-R3: the second turbine failing is the one the text names."""
+    turbines = [Turbine(name="TG1", system_id=11), Turbine(name="TG2", system_id=12)]
+    collector = FakeCollector(fail_on=[2])
+    sender = FakeSender()
+    agent, _ = make_agent(turbines, collector=collector, sender=sender, cycles=1)
+
+    agent.run()
+
+    assert sender.server_states[0][1][ERROR_KEY] == "TG2: database is away"
+
+
+def test_an_error_that_belongs_to_no_turbine_names_none():
+    """UC5-R3: the database not being reachable at all is nobody's turbine."""
+    collector = FakeCollector(connect_fails=True)
+    sender = FakeSender()
+    agent, _ = make_agent(collector=collector, sender=sender, cycles=1)
+
+    agent.run()
+
+    assert sender.server_states[0][1] == {STATUS_KEY: ERROR,
+                                          ERROR_KEY: "cannot connect to the database"}
 
 
 def test_state_returns_to_zero_once_the_cause_is_gone():
@@ -348,8 +390,8 @@ def test_state_returns_to_zero_once_the_cause_is_gone():
 
     agent.run()
 
-    assert [values[STATUS_KEY] for _, values in sender.states] == [ERROR, OK]
-    assert sender.states[-1][1][ERROR_KEY] == ""
+    assert [values[STATUS_KEY] for _, values in sender.server_states] == [ERROR, OK]
+    assert sender.server_states[-1][1][ERROR_KEY] == ""
 
 
 def test_error_text_is_cut_to_the_length_of_the_item():
@@ -365,7 +407,7 @@ def test_error_text_is_cut_to_the_length_of_the_item():
 
     agent.run()
 
-    assert len(sender.states[0][1][ERROR_KEY]) == MAX_ERROR_LENGTH == 255
+    assert len(sender.server_states[0][1][ERROR_KEY]) == MAX_ERROR_LENGTH == 255
 
 
 def test_state_is_sent_even_when_the_cycle_failed():
@@ -377,7 +419,7 @@ def test_state_is_sent_even_when_the_cycle_failed():
     agent.run()
 
     assert sender.sent == []
-    assert len(sender.states) == 2
+    assert len(sender.server_states) == 2
 
 
 def test_unsendable_state_does_not_end_the_loop():
@@ -450,7 +492,7 @@ def test_an_unreachable_zabbix_is_not_reported_as_an_error():
 
     assert agent.status == OK
     assert agent.error_text == ""
-    assert sender.states == []
+    assert sender.server_states == []
 
 
 def test_a_short_outage_leaves_the_log_alone(caplog):
@@ -498,7 +540,7 @@ def test_rejected_values_are_still_an_error():
     agent.run()
 
     assert agent.status == ERROR
-    assert sender.states != []
+    assert sender.server_states != []
 
 
 
@@ -515,15 +557,15 @@ def test_the_charge_of_the_ups_goes_to_the_host_of_the_server():
     assert [name for name, _ in sender.sent] == ["TG1", "TG1"]
 
 
-def test_the_server_reports_its_own_state_every_cycle():
-    """UC7-R4: the host of the server gets its state of the agent, like a turbine."""
+def test_the_server_host_gets_the_state_every_cycle_with_the_ups_watched():
+    """UC5-R3, UC7-R4: the state goes to the host of the server next to the charge."""
     sender = FakeSender()
     agent, _ = make_agent(sender=sender, ups=FakeUps(), server=watched_server(), cycles=2)
 
     agent.run()
 
     assert sender.server_states == [("Praha_server", {STATUS_KEY: OK, ERROR_KEY: ""})] * 2
-    assert agent.server_status == OK
+    assert agent.status == OK
 
 
 def test_the_server_host_gets_only_the_metrics_of_its_catalog():
@@ -538,16 +580,19 @@ def test_the_server_host_gets_only_the_metrics_of_its_catalog():
     assert sent == set(metrics.SERVER_KEYS)
 
 
-def test_a_ups_that_is_not_watched_is_neither_read_nor_reported():
-    """UC7-R1: with the UPS switched off the agent works as it did before UC7."""
+def test_a_ups_that_is_not_watched_is_neither_read_nor_sent():
+    """UC7-R1: with the UPS switched off no charge is read or sent; the state of the
+    agent still is."""
     sender = FakeSender()
     ups = FakeUps()
-    agent, _ = make_agent(sender=sender, ups=ups, server=ServerConfig(), cycles=2)
+    agent, _ = make_agent(sender=sender, ups=ups, server=ServerConfig(host="Praha_server"),
+                          cycles=2)
 
     agent.run()
 
     assert ups.reads == 0
-    assert sender.server_sent == [] and sender.server_states == []
+    assert sender.server_sent == []
+    assert len(sender.server_states) == 2
     assert len(sender.sent) == 2
 
 
@@ -562,7 +607,7 @@ def test_a_failed_read_of_ipp_is_an_error_on_the_server_host():
     assert sender.server_sent == []
     assert sender.server_states[0][1][STATUS_KEY] == ERROR
     assert "cannot be reached" in sender.server_states[0][1][ERROR_KEY]
-    assert agent.server_status == ERROR
+    assert agent.status == ERROR
 
 
 def test_a_failed_read_of_ipp_is_written_to_the_log(written_records):
@@ -588,8 +633,9 @@ def test_the_charge_comes_back_once_ipp_does():
     assert sender.server_states[-1][1][ERROR_KEY] == ""
 
 
-def test_a_failed_read_of_ipp_leaves_the_turbines_alone():
-    """UC7-R4: the turbines keep sending, and say nothing about IPP."""
+def test_a_failed_read_of_ipp_leaves_the_turbines_sending():
+    """UC7-R4: the turbines keep sending their values, and the text of the state has
+    no turbine in it."""
     sender = FakeSender()
     agent, _ = make_agent(sender=sender, ups=FakeUps(fail_on=[1, 2]),
                           server=watched_server(), cycles=2)
@@ -597,12 +643,14 @@ def test_a_failed_read_of_ipp_leaves_the_turbines_alone():
     agent.run()
 
     assert len(sender.sent) == 2
-    assert [values for _, values in sender.states] == [{STATUS_KEY: OK, ERROR_KEY: ""}] * 2
-    assert agent.status == OK
+    assert [values[STATUS_KEY] for _, values in sender.server_states] == [ERROR] * 2
+    assert "TG1" not in sender.server_states[0][1][ERROR_KEY]
+    assert agent.status == ERROR
 
 
-def test_a_database_that_is_away_leaves_the_server_alone():
-    """UC7-R4: the charge is still sent, and the server host says nothing about MySQL."""
+def test_a_database_that_is_away_leaves_the_charge_sending():
+    """UC7-R4: the charge is still sent, and the state on the server host says which
+    turbine the database failed at."""
     sender = FakeSender()
     agent, _ = make_agent(collector=FakeCollector(fail_on=[1, 2]), sender=sender,
                           ups=FakeUps(), server=watched_server(), cycles=2)
@@ -611,8 +659,38 @@ def test_a_database_that_is_away_leaves_the_server_alone():
 
     assert len(sender.server_sent) == 2
     assert [values for _, values in sender.server_states] == \
-        [{STATUS_KEY: OK, ERROR_KEY: ""}] * 2
+        [{STATUS_KEY: ERROR, ERROR_KEY: "TG1: database is away"}] * 2
     assert agent.status == ERROR
+
+
+def test_the_errors_of_both_sources_are_reported_together():
+    """UC5-R3, UC7-R4: one state for the cycle, with the worst status and both texts."""
+    sender = FakeSender()
+    collector = FakeCollector(warnings=["buffer table 'buffer_le' is not in database BVMS"])
+    agent, _ = make_agent(collector=collector, sender=sender,
+                          ups=FakeUps(fail_on=[1]), server=watched_server(), cycles=1)
+
+    agent.run()
+
+    # The warning of the turbine and the failure of IPP in one cycle.
+    status = sender.server_states[0][1]
+    assert status[STATUS_KEY] == ERROR
+    assert status[ERROR_KEY] == \
+        ("TG1: buffer table 'buffer_le' is not in database BVMS; "
+         "IPP at https://localhost:4680 cannot be reached: refused")
+
+
+def test_a_warning_does_not_lower_an_error_of_the_other_source():
+    """UC5-R3: the status is the worst of the cycle, not the last one written."""
+    sender = FakeSender()
+    collector = FakeCollector(warnings=["tabulka chybí"])
+    agent, _ = make_agent(collector=collector, sender=sender,
+                          ups=FakeUps(), server=watched_server(), cycles=1)
+
+    agent.run()
+
+    assert sender.server_states[0][1][STATUS_KEY] == WARNING
+    assert agent.status == WARNING
 
 
 def test_an_unreachable_zabbix_is_not_reported_on_the_server_host():
@@ -623,7 +701,7 @@ def test_an_unreachable_zabbix_is_not_reported_on_the_server_host():
     agent.run()
 
     assert sender.server_states == []
-    assert agent.server_status == OK
+    assert agent.status == OK
 
 
 def test_an_outage_of_zabbix_is_counted_once_per_cycle():
@@ -653,7 +731,7 @@ def test_a_charge_rejected_by_zabbix_is_an_error_on_the_server_host():
 
     agent.run()
 
-    assert agent.server_status == ERROR
+    assert agent.status == ERROR
     assert "Praha_server" in sender.server_states[0][1][ERROR_KEY]
 
 

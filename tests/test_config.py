@@ -157,7 +157,8 @@ def test_packaged_default_is_a_valid_configuration(tmp_path):
 @pytest.mark.parametrize("count", [1, 2, 3, 4])
 def test_one_to_four_turbines_are_accepted(count):
     """UC2-R3: one to four turbines are a valid configuration."""
-    config = Config(turbines=[Turbine(name=f"TG{i}", system_id=i) for i in range(count)])
+    config = Config(turbines=[Turbine(name=f"TG{i}", system_id=i) for i in range(count)],
+                    server=ServerConfig(host="Praha_server"))
 
     config.validate()
 
@@ -174,7 +175,8 @@ def test_turbine_count_outside_the_range_is_rejected(count):
 @pytest.mark.parametrize("count", [0, 1, 2])
 def test_up_to_two_buffers_are_accepted(count):
     """UC2-R5: no buffer, one buffer and two buffers are all valid."""
-    config = Config(turbines=[Turbine(buffers=[f"buffer_{i}" for i in range(count)])])
+    config = Config(turbines=[Turbine(buffers=[f"buffer_{i}" for i in range(count)])],
+                    server=ServerConfig(host="Praha_server"))
 
     config.validate()
 
@@ -221,7 +223,7 @@ def test_period_survives_a_round_trip(tmp_path):
 @pytest.mark.parametrize("period", [MIN_PERIOD, 6, 60, MAX_PERIOD])
 def test_period_inside_the_range_is_accepted(period):
     """UC4-R6: five to a hundred and twenty seconds are what may be set."""
-    Config(zabbix=ZabbixConfig(period=period)).validate()
+    Config(zabbix=ZabbixConfig(period=period), server=ServerConfig(host="Praha_server")).validate()
 
 
 @pytest.mark.parametrize("period", [0, 4, 121, 3600, -5])
@@ -259,7 +261,7 @@ def test_a_configuration_written_before_the_period_existed_still_loads(tmp_path)
 
 def test_a_turbine_has_no_raw_data_prefix_unless_told():
     """UC6-R1: an empty list is a valid configuration."""
-    config = Config(turbines=[Turbine()])
+    config = Config(turbines=[Turbine()], server=ServerConfig(host="Praha_server"))
 
     assert config.turbines[0].raw_prefixes == []
     config.validate()
@@ -286,7 +288,7 @@ def test_turbines_do_not_share_raw_data_prefixes():
 @pytest.mark.parametrize("prefix", ["btt_tg11", "tg11_out", "tvms_tg31", "BTT_TG2A"])
 def test_a_raw_data_prefix_of_a_table_name_is_accepted(prefix):
     """UC6-R1: letters, digits and underscores are what the table names are made of."""
-    Config(turbines=[Turbine(raw_prefixes=[prefix])]).validate()
+    Config(turbines=[Turbine(raw_prefixes=[prefix])], server=ServerConfig(host="Praha_server")).validate()
 
 
 @pytest.mark.parametrize("prefix", ["btt-tg11", "btt_%", "btt tg1", "btt_tg1'", "",
@@ -360,7 +362,7 @@ def test_only_fields_added_after_the_first_release_may_be_missing():
 
 def test_a_server_group_filled_in_watches_nothing():
     """UC2-R9, UC7-R1: a configuration of an older agent has no server group; the one
-    it gets has no host and the UPS switched off, so the agent works as before."""
+    it gets has the UPS switched off, and the host is named by fill_missing()."""
     server = ADDED_FIELDS[Config]["server"]
 
     assert isinstance(server, ServerConfig)
@@ -448,9 +450,50 @@ def test_complete_config_writes_in_the_fields_of_a_newer_agent(tmp_path):
     assert Config.read(path).fill_missing() == []
 
 
-def test_complete_config_writes_in_a_server_group_that_watches_nothing(tmp_path):
-    """UC2-R10, UC7-R1: the operator finds the group in the file, switched off, and
-    the agent still sends nothing to a server host until it is set up."""
+def test_the_host_of_the_server_is_named_after_the_location(tmp_path):
+    """UC2-R9, UC7-R1: an older file has no host of the server, so it gets the
+    location and _server, which is what the installations call it."""
+    path = tmp_path / "config.json"
+    store_without(path, ("server",))
+
+    config = Config.read(path)
+
+    assert config.fill_missing() == ["server"]
+    assert config.server.host == "Praha_server"
+    config.validate()
+
+
+def test_an_empty_host_of_the_server_is_named_too(tmp_path):
+    """UC2-R9: 0.3.x wrote the group with an empty host; it is filled like a missing one."""
+    import json
+
+    path = tmp_path / "config.json"
+    make_config().store(path)
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored["server"]["host"] = ""
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+    config = Config.read(path)
+
+    assert config.fill_missing() == ["server.host"]
+    assert config.server.host == "Praha_server"
+    # Nothing else of the group is touched.
+    assert config.server.ups.enabled is True and config.server.ups.password == "ipp-secret"
+
+
+def test_a_host_of_the_server_that_is_set_is_left_alone(tmp_path):
+    """UC2-R9: only a host nobody named is filled in."""
+    path = tmp_path / "config.json"
+    make_config().store(path)
+    config = Config.read(path)
+    config.server.host = "Plzen_ups"
+
+    assert config.fill_missing() == []
+    assert config.server.host == "Plzen_ups"
+
+
+def test_complete_config_writes_in_the_host_of_the_server(tmp_path):
+    """UC2-R10, UC7-R1: the update leaves a file the agent starts with."""
     import json
 
     path = tmp_path / "config.json"
@@ -459,12 +502,25 @@ def test_complete_config_writes_in_a_server_group_that_watches_nothing(tmp_path)
     assert complete_config(path) == ["server"]
 
     stored = json.loads(path.read_text(encoding="utf-8"))
-    assert stored["server"]["py/object"] == "zabbixvms.config.ServerConfig"
-    assert stored["server"]["host"] == ""
-    assert stored["server"]["ups"] == {
-        "py/object": "zabbixvms.config.UpsConfig", "enabled": False,
-        "url": DEFAULT_IPP_URL, "login": "admin", "password": ""}
-    load_config(path)
+    assert stored["server"]["host"] == "Praha_server"
+    assert stored["server"]["ups"]["enabled"] is False
+    assert load_config(path).server.host == "Praha_server"
+    assert (tmp_path / "config.json.bak").exists()
+
+
+def test_complete_config_writes_in_the_host_of_an_existing_empty_group(tmp_path):
+    """UC2-R10: the file of 0.3.x, whose group has an empty host, is completed too."""
+    import json
+
+    path = tmp_path / "config.json"
+    make_config().store(path)
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored["server"]["host"] = ""
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+    assert complete_config(path) == ["server.host"]
+
+    assert json.loads(path.read_text(encoding="utf-8"))["server"]["host"] == "Praha_server"
 
 
 def test_complete_config_keeps_every_value_that_was_there(tmp_path):
@@ -571,8 +627,8 @@ def test_ipp_is_read_on_this_server_unless_told_otherwise():
     assert UpsConfig().url == DEFAULT_IPP_URL == "https://localhost:4680"
 
 
-def test_a_watched_ups_needs_a_host_of_the_server():
-    """UC7-R1: without a host the charge would have nowhere to go."""
+def test_a_host_of_the_server_is_needed_with_the_ups_watched():
+    """UC7-R1: without a host the charge and the state of the agent have nowhere to go."""
     config = make_config()
     config.server.host = ""
 
@@ -580,10 +636,21 @@ def test_a_watched_ups_needs_a_host_of_the_server():
         config.validate()
 
 
-def test_a_ups_that_is_not_watched_needs_no_host():
-    """UC7-R1: the group of an older agent, filled in switched off, is valid as it is."""
+@pytest.mark.parametrize("host", ["", "   ", None])
+def test_a_host_of_the_server_is_needed_even_without_the_ups(host):
+    """UC7-R1: the host carries the state of the agent, so the UPS being off changes
+    nothing about it."""
     config = make_config()
-    config.server = ServerConfig()
+    config.server = ServerConfig(host=host)
+
+    with pytest.raises(ConfigError, match="server.host"):
+        config.validate()
+
+
+def test_a_ups_that_is_not_watched_is_valid_with_a_host():
+    """UC7-R1: the UPS switched off is a valid configuration as long as the host is set."""
+    config = make_config()
+    config.server = ServerConfig(host="Praha_server")
 
     config.validate()
 
@@ -599,12 +666,13 @@ def test_a_ipp_password_outside_ascii_is_rejected():
 
 
 def test_the_packaged_default_carries_a_server_group_that_watches_nothing():
-    """UC7-R1: the operator sees the group in the file that is deployed, switched off."""
+    """UC7-R1: the operator sees the group in the file that is deployed, with a host and
+    the UPS switched off."""
     import json
 
     stored = json.loads(config_module.default_config_bytes())
 
-    assert stored["server"]["host"] == ""
+    assert stored["server"]["host"].strip()
     assert stored["server"]["ups"]["enabled"] is False
     assert stored["server"]["ups"]["url"] == DEFAULT_IPP_URL
 

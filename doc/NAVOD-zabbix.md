@@ -1,9 +1,11 @@
 # Nastavení Zabbixu
 
 Návod k nasazení šablon agenta. Nejprve se naimportuje šablona, pak se založí hosté;
-kroky 1 a 3 se opakují pro každou turbínu z konfigurace. Host serveru se sledováním UPS
-popisuje kapitola 7. Po aktualizaci agenta na novou verzi stačí šablonu naimportovat znovu,
-nové položky a triggery se tím doplní ke stávajícím.
+kroky 1 a 3 se opakují pro každou turbínu z konfigurace. Host serveru, který nese stav
+agenta a nabití UPS, popisuje kapitola 7 a je potřeba na každé instalaci. Po aktualizaci
+agenta na novou verzi stačí šablonu naimportovat znovu, nové položky a triggery se tím
+doplní ke stávajícím; položky a triggery, které nová verze zrušila, odstraní volba
+**Delete missing** v dialogu importu, viz kapitola 2.
 
 ## 1. Založit hosta
 
@@ -28,11 +30,20 @@ python -c "from zabbixvms.template import template_path; print(template_path())"
 Soubor nese dvě šablony: **VMS zabbix agent** pro hosty turbín a **VMS zabbix agent
 server** pro host serveru z kapitoly 7. Import založí obě najednou.
 
+Při importu nové verze nad starou zaškrtněte v dialogu u **Items**, **Triggers** a
+**Value mappings** volbu **Delete missing**. Od verze 0.4.0 šablona turbín nemá položky
+*Stav agenta* a *Poslední chyba agenta*, jejich triggery ani value map; bez této volby by
+na hostech turbín zůstaly staré, které už nedostávají žádnou hodnotu, a trigger na ně by
+hlásil ticho.
+
 ## 3. Přiřadit šablonu hostovi
 
 V nastavení každého založeného hosta přidejte do pole **Templates** šablonu
 **VMS zabbix agent** a změnu uložte. Tím na hostovi vzniknou položky pro všechny
-metriky agenta i triggery hlásící jeho chyby.
+metriky turbíny i triggery hlásící její poruchy. Když z hosta turbíny přestanou chodit
+otáčky (`vms.speed`) na 5 minut, ozve se trigger *Z hostu nepřišla žádná hodnota 5m*.
+Pokrývá neběžícího agenta, nečitelnou databázi i nedostupný Zabbix; důvod ale hledejte
+ve stavu agenta na hostu serveru (kapitola 7).
 
 Pole **Templates** je součástí formuláře hosta, takže je šablona po kroku 2 k dispozici
 a jde vyplnit rovnou při zakládání hosta v kroku 1.
@@ -163,14 +174,18 @@ Překlep v prefixu vypadá stejně jako software, který vůbec neběží: prefi
 a stáří zápisu se hlásí jako jeden měsíc. Když chyba zápisu přijde hned po nasazení, porovnejte
 nejdřív prefixy s názvy tabulek v databázi.
 
-## 7. Host serveru a nabití UPS
+## 7. Host serveru: stav agenta a nabití UPS
+
+Na host serveru posílá agent **stav agenta** a nabití baterie UPS. Stav agenta (*Stav
+agenta* a *Poslední chyba agenta*) popisuje celý cyklus měření, tedy čtení z databáze
+i z IPP, a na hosty turbín se neposílá. Host serveru je proto potřeba na každé instalaci,
+i když se UPS nesleduje. Na host přibudou později i další metriky společné celému
+serveru. Kapitola se dělá jednou za server.
 
 Nabití baterie UPS čte agent z Eaton Intelligent Power Protector (IPP), který na serveru
-UPS spravuje. Na způsobu připojení UPS k IPP nezáleží, USB i síť se čtou stejně. Nabití
-se neposílá na hosty turbín, ale na samostatný host serveru, na který později přibudou
-i další metriky společné celému serveru. Kapitola se dělá jednou za server.
+UPS spravuje. Na způsobu připojení UPS k IPP nezáleží, USB i síť se čtou stejně.
 
-### 7.1 Zapnout sledování v konfiguraci agenta
+### 7.1 Nastavit skupinu `server` v konfiguraci agenta
 
 V `C:\ProgramData\LogicElements\ZabbixVms\config.json` vyplňte skupinu `server`:
 
@@ -189,15 +204,21 @@ V `C:\ProgramData\LogicElements\ZabbixVms\config.json` vyplňte skupinu `server`
 ```
 
 - `host` je celé jméno hostu serveru v Zabbixu. Na rozdíl od turbín se neskládá
-  z `location`, takže se píše celé.
+  z `location`, takže se píše celé. Je povinné vždy, i s vypnutým UPS: bez něj by stav
+  agenta neměl kam jít a agent konfiguraci odmítne.
 - `url` je adresa webového rozhraní IPP. Výchozí `https://localhost:4680` platí, když IPP
   běží na tomtéž serveru. Adresa `http://…:4679` jen přesměrovává sem.
 - `login` a `password` jsou údaje, se kterými se přihlašujete do webového rozhraní IPP.
   Heslo smí obsahovat jen znaky ASCII, tedy bez diakritiky. Jiné heslo IPP od agenta
   nepřijme a agent je proto odmítne už při startu.
 
-Agent po aktualizaci skupinu doplní s `"enabled": false` a prázdným `host`, takže
-dokud ji nevyplníte, na host serveru nic neposílá. Změna se projeví po restartu služby.
+Při aktualizaci ze starší verze doplní instalační skript (nebo příkaz
+`zabbixvms-service complete-config`) skupinu `server` s `"enabled": false` a s `host`
+složeným z `location` a `_server`, například `Praha_server`; totéž dostane skupina
+z verze 0.3.x s prázdným `host`. Původní soubor zůstane jako `config.json.bak`. Jméno
+zkontrolujte: musí přesně odpovídat hostu serveru v Zabbixu z kroku 7.2.
+S `"enabled": false` se nabití UPS nečte ani neposílá, stav agenta na host serveru chodí
+dál. Změna se projeví po restartu služby.
 
 ### 7.2 Založit host serveru
 
@@ -206,9 +227,11 @@ hostů `VMS` a přiřaďte mu šablonu **VMS zabbix agent server**. Šablonu tur
 nepřiřazujte. Skupina `VMS` zajistí, že se k problémům hostu serveru rozesílají maily
 podle kapitoly 5.
 
-Host serveru má vlastní **Stav agenta** a **Poslední chybu agenta**, které popisují jen
-čtení z IPP. Chyba IPP se proto neobjeví na hostech turbín a výpadek databáze zase ne na
-hostu serveru. Hlídání ticha „Z hostu nepřišla žádná hodnota 5m“ má host serveru také.
+Host serveru má **Stav agenta** a **Poslední chybu agenta**. Nesou chyby a varování
+z celého cyklu: z čtení databáze (text začíná názvem turbíny, které se týká) i z čtení
+IPP. Hlídání ticha „Z hostu nepřišla žádná hodnota 5m“ mají oba typy hostů. Na hostu
+serveru znamená, že agent neběží nebo se nedovolá na Zabbix, na hostu turbíny navíc, že se
+z ní nedaří číst.
 
 ### 7.3 Mez nabití
 

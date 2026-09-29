@@ -6,9 +6,9 @@ Přehled toho, co agent hlásí, kde chyby vznikají a kde k nim hledat podrobno
 
 | Kde | Co tam je |
 | --- | --- |
-| `vms.agent_status` v Zabbixu | 0 bez chyby, 1 varování, 2 chyba |
-| `vms.agent_error` v Zabbixu | text poslední chyby nebo varování, **zkrácený na 255 znaků** |
-| host serveru v Zabbixu | vlastní `vms.agent_status` a `vms.agent_error`, jen o čtení nabití UPS z IPP |
+| `vms.agent_status` v Zabbixu, na hostu serveru | 0 bez chyby, 1 varování, 2 chyba; nejhorší stav z čtení databáze i IPP |
+| `vms.agent_error` v Zabbixu, na hostu serveru | text poslední chyby nebo varování, **zkrácený na 255 znaků**; texty ze dvou zdrojů jsou spojené středníkem |
+| hosty turbín v Zabbixu | stav agenta nedostávají; poruchu čtení pozná jen trigger „Z hostu nepřišla žádná hodnota 5m“ nad `vms.speed` |
 | `C:\ProgramData\LogicElements\ZabbixVms\zabbixvms.log` | tentýž text v plném znění, s časem a úrovní |
 | Windows Event Log, zdroj `ZabbixVms` | jen start a zastavení služby a chyby, které brání jejímu běhu |
 
@@ -17,6 +17,10 @@ Ke složce s logem se nejrychleji dostanete z kontextového menu ikony v systray
 
 Log je vždy úplnější zdroj než `vms.agent_error`: není zkrácený a drží i historii, ne
 jen poslední událost.
+
+Chyba nebo varování, které se týká turbíny, začíná v textu jejím názvem, například
+`TG1: database is away`. Chyba bez turbíny, třeba nedostupná databáze při připojení nebo
+chyba IPP, název nemá.
 
 ## Úplný výčet chyb neexistuje
 
@@ -33,10 +37,10 @@ dál a další cyklus to zkusí znovu.
 
 **Z kódu agenta:**
 
-- `table info_le has no row with SystemId 10 of turbine 'TEST'`
+- `TEST: table info_le has no row with SystemId 10`
   Turbína má v konfiguraci `system_id`, ke kterému v informační tabulce není řádek.
   Typicky překlep v `system_id` nebo turbína, která do databáze ještě nic nezapsala.
-- `Zabbix rejected 10 of 10 values of host LE_TEST`
+- `TEST: Zabbix rejected 10 of 10 values of host LE_TEST`
   Trapper hodnoty nepřijal. Nejčastější příčina je, že host toho jména v Zabbixu není —
   jméno musí přesně odpovídat tvaru `<location>_<název turbíny>` z konfigurace.
 - `collector is not connected to the database`
@@ -51,9 +55,10 @@ dál a další cyklus to zkusí znovu.
 
 **Na hostu serveru, při čtení UPS z IPP:**
 
-Tyhle chyby vidí jen host serveru. Hosty turbín hlásí dál jen to, co se týká databáze, a na
-hostu serveru se naopak neobjeví nic o MySQL. V cyklu s chybou agent nabití `ups.charge`
-neodešle. Jakmile příčina zmizí, nabití v dalším cyklu zase přijde, bez restartu služby.
+Text těchto chyb nemá na začátku název turbíny. Chyba IPP nezastaví odesílání hodnot turbín
+a chyba databáze zase odesílání nabití; oba zdroje se hlásí ve stejném stavu agenta na hostu
+serveru. V cyklu s chybou agent nabití `ups.charge` neodešle. Jakmile příčina zmizí, nabití
+v dalším cyklu zase přijde, bez restartu služby.
 
 - `IPP at https://localhost:4680 cannot be reached: ...`
   Na adrese z `server.ups.url` nikdo neodpovídá, nebo neodpověděl do 10 sekund. Typicky
@@ -109,8 +114,10 @@ metriku odeslat nemůže:
   jinou turbínu nebo posílal pod jiného hosta. Výchozí hodnotu dostanou jen položky, které
   přibyly v novější verzi agenta; ty si doplní sám.
 - `cannot read configuration ...` u poškozeného souboru, například s chybou v zápisu JSON
-- `server.host is empty, the UPS is watched only with a Zabbix host of the server to send it to`
-  Sledování UPS je zapnuté, ale chybí jméno hostu serveru.
+- `server.host is empty, the state of the agent is sent to a Zabbix host of the server`
+  Ve skupině `server` chybí jméno hostu serveru. Je potřeba vždy, i s vypnutým sledováním
+  UPS, protože host nese stav agenta. Při aktualizaci ze starší verze ho doplní `complete-config` jako `<location>_server`;
+  chybu tak uvidíte jen tehdy, když `location` chybí nebo když jméno smažete ručně.
 - `server.ups.password may hold ASCII characters only, IPP cannot take any other`
   IPP heslo s diakritikou od agenta nepřijme, viz [návod na Zabbix](NAVOD-zabbix.md),
   kapitola 7.

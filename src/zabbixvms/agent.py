@@ -6,9 +6,10 @@ down, a turbine has no row - the cycle is given up, the state of the agent says 
 and the next cycle starts five seconds later and picks up again once the cause is
 gone.
 
-The turbines and the server are two parts of the cycle that do not share a fault: the
-server host reports only what went wrong reading the server, the turbine hosts only
-what went wrong reading the database.
+The turbines and the server are two parts of the cycle that do not share a fault: a
+failure reading the database does not stop the charge of the UPS from being sent, nor
+the other way round. What went wrong in either is reported together, as the state of
+the agent on the host of the server, since the agent is one for all of them.
 """
 
 from __future__ import annotations
@@ -46,7 +47,8 @@ TOLERATED_SEND_FAILURES = 5
 
 class Agent:
     """Runs the measurement cycle over all turbines of the configuration and over
-    the server, when the configuration watches its UPS."""
+    the server, when the configuration watches its UPS, and reports how it went to the
+    host of the server."""
 
     def __init__(self, config: Config, collector: Collector | None = None,
                  sender: TrapperSender | None = None, sleep=time.sleep,
@@ -65,13 +67,14 @@ class Agent:
         self.last_error: Exception | None = None
         # Cycles in a row whose values did not reach Zabbix; zero once one gets there.
         self.failed_sends = 0
-        # What the agent said about itself in the last cycle, on the turbine hosts.
+        # Error of the last reading of the server, or None when it went through.
+        self.server_last_error: Exception | None = None
+        # What the agent said about itself in the last cycle, on the host of the server.
         self.status = OK
         self.error_text = ""
-        # The same for the host of the server.
-        self.server_last_error: Exception | None = None
-        self.server_status = OK
-        self.server_error_text = ""
+        # The turbine the cycle was busy with when it failed; None before the first
+        # one, when the connection to the database is being made.
+        self._turbine_in_work: str | None = None
 
     @property
     def running(self) -> bool:
@@ -85,11 +88,14 @@ class Agent:
     def cycle(self) -> None:
         """One measurement cycle: every turbine collected and sent."""
         self._warnings = []
+        self._turbine_in_work = None
         if not self._collector.is_connected:
             self._collector.connect()
         for turbine in self._config.turbines:
+            self._turbine_in_work = turbine.name
             values = self._collector.collect(turbine)
-            self._warnings.extend(self._collector.warnings)
+            self._warnings.extend(f"{turbine.name}: {warning}"
+                                  for warning in self._collector.warnings)
             self._sender.send(turbine, values)
 
     def server_cycle(self) -> None:
@@ -100,39 +106,42 @@ class Agent:
         """Repeat the cycle until stop() is called."""
         self._running = True
         while self._running:
-            outcomes = [self._run_turbines()]
+            parts = [self._run_turbines()]
             if self.ups is not None:
-                outcomes.append(self._run_server())
-            unreachable = [outcome for outcome in outcomes
-                           if isinstance(outcome, ZabbixUnreachable)]
+                parts.append(self._run_server())
+            unreachable = [result for result, _, _ in parts
+                           if isinstance(result, ZabbixUnreachable)]
             if unreachable:
                 self._tolerate_unreachable(unreachable[0])
-            elif any(outcome is True for outcome in outcomes):
-                self._forget_unreachable()
+            else:
+                if any(result is True for result, _, _ in parts):
+                    self._forget_unreachable()
+                self.status = max(status for _, status, _ in parts)
+                self.error_text = "; ".join(
+                    text for _, _, text in parts if text)[:MAX_ERROR_LENGTH]
+                self.report_state()
             self._sleep(self.period)
 
     def _run_turbines(self):
-        """The part of the cycle for the turbines, with the state it ends in reported.
+        """The part of the cycle for the turbines.
 
-        Returns True when the values got to Zabbix, the ZabbixUnreachable that kept
-        them away, or False when the cycle failed before it could tell.
+        Returns what became of the values - True when they got to Zabbix, the
+        ZabbixUnreachable that kept them away, or False when the cycle failed before it
+        could tell - with the status and the text of this part.
         """
         try:
             self.cycle()
             self.last_error = None
             status, message = self._state_of_the_cycle()
         except ZabbixUnreachable as err:
-            return err
+            return err, OK, ""
         except Exception as err:
             # The loop outlives the cycle; the database or Zabbix may come back.
             self.last_error = err
-            status, message = ERROR, str(err)
-            log.error("measurement cycle failed: %s", err)
+            status, message = ERROR, self._about_turbine(self._turbine_in_work, err)
+            log.error("measurement cycle failed: %s", message)
             self._collector.close()
-        self.status = status
-        self.error_text = message[:MAX_ERROR_LENGTH]
-        self.report_state()
-        return status != ERROR
+        return status != ERROR, status, message
 
     def _run_server(self):
         """The part of the cycle for the server, answering like _run_turbines()."""
@@ -141,15 +150,17 @@ class Agent:
             self.server_last_error = None
             status, message = OK, ""
         except ZabbixUnreachable as err:
-            return err
+            return err, OK, ""
         except Exception as err:
             self.server_last_error = err
             status, message = ERROR, str(err)
             log.error("reading the server failed: %s", err)
-        self.server_status = status
-        self.server_error_text = message[:MAX_ERROR_LENGTH]
-        self._report_server_state()
-        return status != ERROR
+        return status != ERROR, status, message
+
+    @staticmethod
+    def _about_turbine(turbine: str | None, err: Exception) -> str:
+        """Text of an error, led by the turbine it concerns when there is one."""
+        return f"{turbine}: {err}" if turbine is not None else str(err)
 
     def _tolerate_unreachable(self, err: Exception) -> None:
         """Count a cycle whose values never arrived, and say nothing to Zabbix.
@@ -176,27 +187,17 @@ class Agent:
         self._collector.close()
 
     def report_state(self) -> None:
-        """Send how the agent is doing to the host of every turbine.
+        """Send how the agent is doing to the host of the server.
 
         The state goes out even when the cycle failed, so the operator sees why no
         values arrived. When Zabbix is the thing that is down, this cannot get
         through either and is only written to the log.
         """
         values = {STATUS_KEY: self.status, ERROR_KEY: self.error_text}
-        for turbine in self._config.turbines:
-            try:
-                self._sender.send(turbine, values)
-            except Exception as err:
-                log.error("state of the agent could not be sent for turbine %s: %s",
-                          turbine.name, err)
-
-    def _report_server_state(self) -> None:
-        """Send how reading the server went to its host, like report_state()."""
-        values = {STATUS_KEY: self.server_status, ERROR_KEY: self.server_error_text}
         try:
             self._sender.send_to(self._config.server.host, values)
         except Exception as err:
-            log.error("state of the agent could not be sent for the server %s: %s",
+            log.error("state of the agent could not be sent to the host %s: %s",
                       self._config.server.host, err)
 
     def _state_of_the_cycle(self) -> tuple[int, str]:

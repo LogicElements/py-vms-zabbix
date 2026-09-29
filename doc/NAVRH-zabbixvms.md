@@ -47,7 +47,7 @@ src/zabbixvms/
 | `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC4-R8, UC6-R2 až UC6-R5 |
 | `ups.py` | přihlášení k Eaton IPP, držení session, nejnižší nabití přes UPS, chyby čtení | UC7-R2, UC7-R3 |
 | `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>` nebo pod hostem serveru, kontrola odmítnutých hodnot | UC2-R2, UC2-R5, UC7-R2 |
-| `agent.py` | cyklus přes turbíny a server, každý s vlastním stavem agenta, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6, UC7-R3, UC7-R4 |
+| `agent.py` | cyklus přes turbíny a server, jeden společný stav agenta odesílaný na host serveru, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6, UC5-R3, UC7-R3, UC7-R4 |
 | `service.py` | registrace a odregistrace služby, automatický start, oprávnění k ovládání, příkaz `complete-config` pro aktualizaci | UC1-R2, UC1-R3, UC1-R7, UC2-R10 |
 | `servicecontrol.py` | zjištění stavu služby a její spuštění, zastavení a restart | UC1-R5, UC1-R6 |
 | `tray.py` | ikona podle stavu služby, kontextové menu včetně otevření datové složky | UC1-R5, UC1-R6, UC1-R8, UC2-R8 |
@@ -179,13 +179,16 @@ vychází z toho, co z nich čte `user_settings.js`.
 
 ### Turbíny a server jsou dvě nezávislé části cyklu
 
-Stav agenta se hlásí na každý host zvlášť. Hosty turbín popisují jen čtení z databáze, host
-serveru jen čtení serverových metrik. Cyklus v `agent.py` má proto dvě části, každou
-s vlastním `status` a `error_text`, a chyba jedné nezastaví druhou. Nedostupný Zabbix se
-počítá jednou za cyklus bez ohledu na to, kolik hostů se nedovolalo. Log o něm pak přijde po
-pěti cyklech stejně jako dřív.
+Stav agenta je jeden a hlásí se jen na host serveru. Cyklus v `agent.py` má dvě části,
+turbíny a server, a chyba jedné nezastaví druhou; obě vrátí svůj stav a text a `run()` z nich
+složí stav cyklu: nejhorší status a texty spojené středníkem. Text chyby turbíny začíná
+jejím názvem, k čemuž si agent pamatuje, u které turbíny cyklus skončil (`_turbine_in_work`);
+chyba bez turbíny (připojení k databázi, IPP) název nemá. Nedostupný Zabbix se počítá jednou
+za cyklus bez ohledu na to, kolik hostů se nedovolalo, a stav se pak neodesílá. Log o něm
+přijde po pěti cyklech stejně jako dřív.
 
-Katalogy metrik a triggerů jsou dva a šablony v `zabbix_template.yaml` také. Obě šablony
-mají `vms.agent_status` a stejné triggery nad ním, a tak má šablona serveru svá UUID odvozená
-s předponou `server:`. Šablona turbín si ponechává UUID, se kterými byla exportovaná poprvé,
-takže nový import ji aktualizuje na místě.
+Katalogy metrik a triggerů jsou dva a šablony v `zabbix_template.yaml` také. Stav agenta
+a value map má jen šablona serveru, šablona turbín na ticho hlídá `nodata` nad `vms.speed`.
+Šablona serveru má UUID odvozená s předponou `server:`, aby se s šablonou turbín nikdy
+nepotkala. Šablona turbín si ponechává UUID, se kterými byla exportovaná poprvé, takže nový
+import ji aktualizuje na místě.

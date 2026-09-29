@@ -236,7 +236,7 @@ class Collector:
         if not rows:
             raise CollectorError(
                 f"table {self._database.info_table} has no row with SystemId "
-                f"{turbine.system_id} of turbine {turbine.name!r}"
+                f"{turbine.system_id}"
             )
         return rows[0]
 
@@ -302,8 +302,7 @@ class Collector:
                 # Counting zero rows here would look like an empty buffer, which is
                 # something else entirely than a table that is not there.
                 self.warnings.append(
-                    f"buffer table {table!r} of turbine {turbine.name!r} is not in "
-                    f"database {self._database.database}")
+                    f"buffer table {table!r} is not in database {self._database.database}")
         raw_tables = self.read_raw_tables(turbine)
         return self.values(turbine, info, buffer_rows, raw_tables, now)
 

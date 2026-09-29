@@ -75,10 +75,11 @@ def test_the_buffers_have_one_metric_each_kind():
                 if key.endswith(("_1", "_2"))]
 
 
-def test_catalog_splits_into_collector_and_agent_keys():
-    """The agent reports its own state, the collector everything else."""
-    assert set(metrics.COLLECTOR_KEYS) | set(metrics.AGENT_KEYS) == set(metrics.KEYS)
-    assert not set(metrics.COLLECTOR_KEYS) & set(metrics.AGENT_KEYS)
+def test_the_collector_fills_every_metric_of_a_turbine():
+    """UC3-R1, UC5-R3: the state of the agent is not a metric of a turbine, so the
+    collector has all of them."""
+    assert set(metrics.COLLECTOR_KEYS) == set(metrics.KEYS)
+    assert not set(metrics.AGENT_KEYS) & set(metrics.KEYS)
 
 
 def test_by_key_finds_a_metric():
@@ -134,7 +135,7 @@ def test_every_server_metric_has_what_an_item_needs():
     assert len(set(metrics.SERVER_KEYS)) == len(metrics.SERVER_KEYS)
 
 
-def test_the_server_reports_the_state_of_the_agent_too():
-    """UC7-R4: the host of the server has a state of its own, under the same keys."""
+def test_the_server_reports_the_state_of_the_agent():
+    """UC5-R3: the state of the agent is a metric of the host of the server."""
     assert set(metrics.AGENT_KEYS) <= set(metrics.SERVER_KEYS)
     assert metrics.by_key("ups.charge", metrics.SERVER_METRICS).units == "%"

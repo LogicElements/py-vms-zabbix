@@ -45,6 +45,7 @@ EXPORT_VALUE_TYPES = {
     ValueType.CHARACTER: "CHAR",
 }
 
+STATUS_KEY = "vms.agent_status"
 STATUS_VALUE_MAP = "Stav agenta"
 STATUS_MAPPINGS = (("0", "Bez chyby"), ("1", "Varování"), ("2", "Chyba"))
 
@@ -61,10 +62,10 @@ class Template:
     metrics: tuple
     triggers: tuple
     macros: tuple
-    # Put in front of the names the uuids are derived from. Both templates hold the
-    # state of the agent and its triggers, and an object of one must not share a uuid
-    # with the other. The template of the turbines keeps the plain names it was first
-    # exported with, so a re-import still updates it in place.
+    # Put in front of the names the uuids are derived from, so that an object of one
+    # template never shares a uuid with one of the other. The template of the turbines
+    # keeps the plain names it was first exported with, so a re-import still updates
+    # it in place.
     uuid_scope: str = ""
 
     def uuid_of(self, name: str) -> str:
@@ -128,7 +129,7 @@ def item(metric, template: Template = TURBINES) -> dict:
     }
     if metric.units:
         entry["units"] = metric.units
-    if metric.key == "vms.agent_status":
+    if metric.key == STATUS_KEY:
         entry["valuemap"] = {"name": STATUS_VALUE_MAP}
     item_triggers = triggers_of(metric.key, template)
     if item_triggers:
@@ -188,7 +189,7 @@ def all_triggers(template: Template = TURBINES) -> list[dict]:
 
 def exported_template(template: Template) -> dict:
     """One template of the export, with its items, macros and value map."""
-    return {
+    exported = {
         "uuid": stable_uuid(f"template:{template.name}"),
         "template": template.name,
         "name": template.name,
@@ -199,15 +200,18 @@ def exported_template(template: Template) -> dict:
             {"macro": macro.name, "value": macro.value, "description": macro.description}
             for macro in template.macros
         ],
-        "valuemaps": [
+    }
+    # The value map translates the state of the agent, which only the server reports.
+    if any(metric.key == STATUS_KEY for metric in template.metrics):
+        exported["valuemaps"] = [
             {
                 "uuid": template.uuid_of(f"valuemap:{STATUS_VALUE_MAP}"),
                 "name": STATUS_VALUE_MAP,
                 "mappings": [{"value": value, "newvalue": text}
                              for value, text in STATUS_MAPPINGS],
             },
-        ],
-    }
+        ]
+    return exported
 
 
 def build() -> dict:

@@ -28,7 +28,7 @@
   ],
   "server": {
     "py/object": "zabbixvms.config.ServerConfig",
-    "host": "",
+    "host": "LE_server",
     "ups": {
       "py/object": "zabbixvms.config.UpsConfig",
       "enabled": false,

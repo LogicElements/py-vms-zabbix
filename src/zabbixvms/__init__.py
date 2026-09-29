@@ -4,4 +4,4 @@ Nothing is re-exported here: import from the modules directly, for example
 from zabbixvms.config import Config.
 """
 
-__version__ = "0.3.1"
+__version__ = "0.4.1"

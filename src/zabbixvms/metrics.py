@@ -105,22 +105,6 @@ METRICS = (
                     "prefixu turbíny, který je na tom nejhůř. "
                     "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
-    Metric(
-        key="vms.agent_status",
-        name="Stav agenta",
-        value_type=ValueType.UNSIGNED,
-        units="",
-        description="0 = agent pracuje bez chyby, 1 = varování, 2 = chyba. "
-                    "Popis chyby nese `vms.agent_error`.",
-    ),
-    Metric(
-        key="vms.agent_error",
-        name="Poslední chyba agenta",
-        value_type=ValueType.CHARACTER,
-        units="",
-        description="Text poslední chyby nebo varování agenta; prázdný, "
-                    "když je vše v pořádku.",
-    ),
 )
 
 @dataclass(frozen=True)
@@ -219,9 +203,18 @@ TRIGGERS = (
         priority="HIGH",
         blocked_by=TURBINE_BELOW_NOMINAL,
     ),
+    Trigger(
+        # The speed is the value every cycle that reads the turbine has, so its silence
+        # covers a stopped agent, a database that cannot be read and a Zabbix that
+        # cannot be reached alike.
+        name="Z hostu nepřišla žádná hodnota 5m",
+        key="vms.speed",
+        condition="nodata({METRIC},5m)=1",
+        priority="HIGH",
+    ),
 )
 
-# The state of the agent is watched the same way on every host it reports to.
+# The state of the agent is reported to the host of the server only.
 AGENT_TRIGGERS = (
     Trigger(
         # Below AVERAGE on purpose: the trigger on vms.agent_error fires with this one and
@@ -245,19 +238,16 @@ AGENT_TRIGGERS = (
     ),
 )
 
-TRIGGERS += AGENT_TRIGGERS
-
 KEYS = tuple(metric.key for metric in METRICS)
 
-# The split follows the Zdroj column of the source table in the PRS: the agent reports
-# its own state itself, the rest is computed from the database by the collector.
-AGENT_KEYS = ("vms.agent_status", "vms.agent_error")
-COLLECTOR_KEYS = tuple(key for key in KEYS if key not in AGENT_KEYS)
+# Every metric of a turbine is computed from the database by the collector; the state of
+# the agent is not one of them, it belongs to the host of the server.
+COLLECTOR_KEYS = KEYS
 
 
 # The host of the server carries what belongs to the server as a whole rather than to
-# one turbine; the UPS is the first of it. Its state of the agent describes only the
-# reading of these metrics, so the text differs from the one of a turbine.
+# one turbine; the UPS is the first of it, and the state of the agent, which covers the
+# reading of the turbines and of the server alike, is the other.
 SERVER_METRICS = (
     Metric(
         key="ups.charge",
@@ -271,16 +261,16 @@ SERVER_METRICS = (
         name="Stav agenta",
         value_type=ValueType.UNSIGNED,
         units="",
-        description="0 = serverové metriky přečtené bez chyby, 1 = varování, 2 = chyba. "
-                    "Popis chyby nese `vms.agent_error`.",
+        description="0 = cyklus proběhl bez chyby, 1 = varování, 2 = chyba při čtení "
+                    "z databáze nebo z IPP. Popis chyby nese `vms.agent_error`.",
     ),
     Metric(
         key="vms.agent_error",
         name="Poslední chyba agenta",
         value_type=ValueType.CHARACTER,
         units="",
-        description="Text poslední chyby nebo varování při čtení serverových metrik; "
-                    "prázdný, když je vše v pořádku.",
+        description="Text poslední chyby nebo varování agenta, u turbíny s jejím názvem "
+                    "na začátku; prázdný, když je vše v pořádku.",
     ),
 )
 
@@ -302,6 +292,9 @@ SERVER_TRIGGERS = (
 ) + AGENT_TRIGGERS
 
 SERVER_KEYS = tuple(metric.key for metric in SERVER_METRICS)
+
+# The state of the agent: sent by the agent itself, to the host of the server only.
+AGENT_KEYS = ("vms.agent_status", "vms.agent_error")
 
 
 def by_key(key: str, catalog=METRICS) -> Metric:

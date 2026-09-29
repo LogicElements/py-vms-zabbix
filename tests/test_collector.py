@@ -336,7 +336,6 @@ def test_missing_buffer_table_is_worth_a_warning():
 
     assert len(collector.warnings) == 1
     assert "buffer_gone" in collector.warnings[0]
-    assert "TG1" in collector.warnings[0]
 
 
 def test_a_buffer_table_that_is_there_warns_about_nothing():

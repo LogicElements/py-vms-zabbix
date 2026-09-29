@@ -350,11 +350,11 @@ def test_complete_config_command_writes_in_what_a_newer_agent_added(capsys):
     """UC2-R10: the update runs zabbixvms-service complete-config."""
     import json
 
-    from zabbixvms.config import Config, config_path
+    from zabbixvms.config import Config, ServerConfig, config_path
 
     path = config_path()
     path.parent.mkdir(parents=True)
-    Config().store(path)
+    Config(server=ServerConfig(host="Praha_server")).store(path)
     stored = json.loads(path.read_text(encoding="utf-8"))
     del stored["turbines"][0]["raw_prefixes"]
     path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
