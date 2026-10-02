@@ -25,7 +25,7 @@
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py, tests/test_agent.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
-| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá | |
+| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Hotovo | tests/test_template.py |
 | UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Hotovo | tests/test_collector.py |
 | UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Hotovo | tests/test_collector_db.py |
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
@@ -37,7 +37,7 @@
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný na host serveru jako dvojice metrik | Hotovo | tests/test_agent.py |
-| UC5-R4 | Triggery turbín a value map stavu agenta v šablonách | Zbývá | |
+| UC5-R4 | Triggery turbín a value map stavu agenta v šablonách | Hotovo | tests/test_template.py, tests/test_triggers.py |
 | UC6-R1 | Seznam prefixů tabulek surových dat v konfiguraci turbíny | Hotovo | tests/test_config.py |
 | UC6-R2 | Tabulka patří k prefixu podle celého názvu `<prefix>_<datum>` | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
@@ -52,9 +52,9 @@
 | UC7-R7 | Dokumentace nasazení hostu serveru, sledování UPS a jeho chyb | Hotovo | N/A |
 | UC8-R1 | Tabulka trendových dat, okno čtení a posun času v konfiguraci databáze, výchozí `dukovany_local` | Hotovo | tests/test_config.py, tests/test_collector.py |
 | UC8-R2 | Pole signálů v konfiguraci každé turbíny | Hotovo | tests/test_config.py |
-| UC8-R3 | Stáří signálu z posledního záznamu v okně nejnovějších řádků tabulky | Zbývá | |
+| UC8-R3 | Stáří signálu z posledního záznamu v okně nejnovějších řádků tabulky | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC8-R4 | `vms.trend_age` jako nejstarší ze signálů turbíny, levný dotaz | Hotovo | tests/test_collector.py, tests/test_collector_db.py, tests/test_agent.py |
-| UC8-R5 | Chyba trendových dat při stáří přes 5 minut, podmíněná otáčkami | Zbývá | |
+| UC8-R5 | Chyba trendových dat při stáří přes 5 minut, podmíněná otáčkami | Hotovo | tests/test_triggers.py, tests/test_template.py |
 | UC8-R6 | Dokumentace nastavení sledování trendových dat a jeho chyb | Hotovo | N/A |
 
 ## Účel projektu

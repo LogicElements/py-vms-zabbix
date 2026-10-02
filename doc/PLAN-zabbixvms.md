@@ -34,7 +34,7 @@
 | 12 | Nová tabulka surových dat bez zápisu | [x] |
 | 13 | Sledování UPS serveru | [x] |
 | 14 | Stav agenta jen na hostu serveru | [x] |
-| 15 | Sledování trendových dat | [ ] |
+| 15 | Sledování trendových dat | [x] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -523,3 +523,7 @@ razítko jako čas v pevném pásmu převádí na místní čas serveru. Úprava
 UC8-R3 a UC2-R9. UC8-R1 a UC2-R9 jsou po testech zase Hotovo, UC8-R3 zůstává Zbývá, dokud se
 na serveru neověří, že čerstvě zapisovaný signál má malé stáří. Testy kontrolují zimní i letní
 čas i okolí obou přechodů pomocí vlastní zóny CET/CEST, protože na stroji není `tzdata`.
+
+**Ověření na serverech (verze 0.5.1, 2026-10-02):** balíček je nasazený, agent loguje
+`vms.trend_age` a trigger Chyba trendových dat se ozývá. Ruční krok 16 tím prošel, takže
+UC8-R3, UC8-R5, UC3-R4 a UC5-R4 jsou Hotovo a etapa 15 je dokončená.
