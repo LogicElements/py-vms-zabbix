@@ -57,6 +57,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
     "db: needs the BVMS test database, skipped when it is not reachable",
+    "slow: takes minutes, runs only with ZABBIXVMS_SLOW_TESTS=1 set",
     "gui: builds a real window and systray icon, needs a desktop session",
 ]
 

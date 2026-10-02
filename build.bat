@@ -36,6 +36,15 @@ if defined PUBLISH (
 
 echo === Building with "%VENV_PYTHON%"
 
+rem The tests that need the BVMS test database take its password from the environment,
+rem because the package, and so the repository, carries none. It is set in
+rem build.local.bat, which is not versioned; see build.local.bat.example.
+if exist "%~dp0build.local.bat" call "%~dp0build.local.bat"
+if not defined ZABBIXVMS_TEST_DB_PASSWORD (
+    echo WARNING: ZABBIXVMS_TEST_DB_PASSWORD is not set, the database tests are skipped.
+    echo          Create build.local.bat from build.local.bat.example to run them.
+)
+
 echo === Run the tests
 "%VENV_PYTHON%" -m pytest -q
 if errorlevel 1 (

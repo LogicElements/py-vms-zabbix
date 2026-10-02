@@ -36,15 +36,23 @@ Součástí sady jsou i testy proti prostředí, které jdou vynechat:
 .venv\Scripts\python -m pytest -m "not db and not gui"
 ```
 
-- `db` – testy proti testovací databázi `BVMS`; když databáze není dostupná, přeskočí se samy
+- `db` – testy proti testovací databázi `BVMS`; když databáze není dostupná nebo není nastavené
+  heslo, přeskočí se samy
 - `gui` – testy, které staví skutečné okno a ikonu v systray, takže potřebují přihlášené sezení
+
+Balíček žádné heslo neobsahuje, a tak databázové testy berou heslo z proměnné prostředí
+`ZABBIXVMS_TEST_DB_PASSWORD`; bez ní se přeskočí. Případně se nastavuje i
+`ZABBIXVMS_TEST_DB_HOST`, `ZABBIXVMS_TEST_DB_USER` a `ZABBIXVMS_TEST_DB_NAME`, pokud testovací
+databáze není `localhost`, uživatel `VMS` a databáze `BVMS`. `build.bat` je načte ze souboru
+`build.local.bat`, který se neverzuje; založí se zkopírováním `build.local.bat.example`.
+Bez něj `build.bat` upozorní, že se databázové testy přeskakují.
 
 ## Číslování verzí
 
 Verze balíčku je na jediném místě, v `src/zabbixvms/__init__.py`:
 
 ```python
-__version__ = "0.4.1"
+__version__ = "0.5.1"
 ```
 
 `pyproject.toml` si ji odtud bere (`dynamic = ["version"]`), takže se obě čísla nemají jak

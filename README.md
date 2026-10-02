@@ -2,7 +2,7 @@
 
 Zabbix agent pro monitorování instalací VMS od Logic Elements.
 
-Sleduje MySQL databázi (`BVMS`), do které zapisuje serverový software VMS, a odvozené metriky o stavu systému (měřené otáčky, stáří bufferů, konfigurace a časových značek, počty řádků v bufferech, ukládání a export surových dat VMS a TVMS) odesílá na Zabbix server jako trapper položky (`vms.speed`, `vms.buf_rows`, ...). Na samostatný host serveru posílá nabití baterie UPS, které čte z Eaton Intelligent Power Protector.
+Sleduje MySQL databázi (`BVMS`), do které zapisuje serverový software VMS, a odvozené metriky o stavu systému (měřené otáčky, stáří bufferů, konfigurace a časových značek, počty řádků v bufferech, ukládání a export surových dat VMS a TVMS, stáří trendových dat vybraných signálů) odesílá na Zabbix server jako trapper položky (`vms.speed`, `vms.buf_rows`, ...). Na samostatný host serveru posílá nabití baterie UPS, které čte z Eaton Intelligent Power Protector.
 
 Balíček vznikl vyčleněním z projektu [`pyvms`](https://github.com/LogicElements/py-vms); na něm už nezávisí a s databází `BVMS` pracuje sám.
 
@@ -11,7 +11,7 @@ Balíček vznikl vyčleněním z projektu [`pyvms`](https://github.com/LogicElem
 - [PRS-zabbixvms.md](doc/PRS-zabbixvms.md) – Product Requirement Specification: účel projektu, use cases a requirementy.
 - [PLAN-zabbixvms.md](doc/PLAN-zabbixvms.md) – plán: rozpad requirementů do etap.
 - [NAVRH-zabbixvms.md](doc/NAVRH-zabbixvms.md) – návrh struktury balíčku: jména, členění modulů a odpovědnosti.
-- [NAVOD-zabbix.md](doc/NAVOD-zabbix.md) – návod k nastavení Zabbixu: založení hostů, import šablony, mez otáček, odesílání e-mailů při problému a prefixy tabulek surových dat.
+- [NAVOD-zabbix.md](doc/NAVOD-zabbix.md) – návod k nastavení Zabbixu: založení hostů, import šablony, mez otáček, odesílání e-mailů při problému, prefixy tabulek surových dat a signály trendových dat.
 - [CHYBY-agenta.md](doc/CHYBY-agenta.md) – co agent hlásí, kde chyby vznikají a kde k nim hledat podrobnosti.
 - [BUILD-balicku.md](doc/BUILD-balicku.md) – sestavení balíčku: virtuální prostředí, testy, `build.bat` a publikování.
 
@@ -55,6 +55,11 @@ vytvoří se při prvním spuštění z výchozí šablony dodané v balíčku; 
 zůstává beze změny i při aktualizaci balíčku. Jen instalační skript z `offline` do něj při
 aktualizaci doplní položky, které přinesla nová verze, a původní soubor nechá vedle jako
 `config.json.bak`.
+
+Balíček žádné heslo neobsahuje: v nově vytvořené konfiguraci jsou hesla do MySQL
+(`database.password`) a do IPP (`server.ups.password`) prázdná a obsluha je doplní do
+`config.json`. Dokud v něm heslo do MySQL není, agent se nepřipojí a do logu zapíše chybu
+přístupu.
 
 ## Vývoj
 

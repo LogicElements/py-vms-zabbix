@@ -26,7 +26,7 @@ from zabbixvms.ups import IppClient, IppError, encode_password
 
 DATA = Path(__file__).resolve().parent / "data" / "ipp"
 NODE_ID = "GA10R14030"
-PASSWORD = "Vms2015"
+PASSWORD = "test-password"
 
 # A self-signed certificate for CN=localhost with its key, made for these tests only,
 # the way IPP serves one of its own.
@@ -191,13 +191,14 @@ def client_of(ipp, password=PASSWORD, **kwargs):
 def test_the_password_is_hashed_the_way_the_page_of_ipp_does():
     """UC7-R2: HMAC-SHA1 keyed by the SHA1 of the password in hex, over the challenge.
 
-    The expected values were computed by SHA1 and HMAC of IPP's own libs/utils.js,
-    run under Windows Script Host.
+    The first expected value was computed by SHA1 and HMAC of IPP's own libs/utils.js,
+    run under Windows Script Host; the second by hashlib and hmac with the same recipe,
+    which gives that first value too.
     """
     assert encode_password("admin", "0123456789abcdef") == \
         "be4a6371f71278de2e63b68fdbd25d01234bd7ac"
-    assert encode_password("Vms2015", "c2VjcmV0LWNoYWxsZW5nZQ==") == \
-        "39fb1c19ecf03d02ccf9f48bd96ab33045a38b0a"
+    assert encode_password("test-password", "c2VjcmV0LWNoYWxsZW5nZQ==") == \
+        "fb2dd27239c046c681607103cc0787ce0dac90c8"
 
 
 def test_the_charge_is_the_remaining_capacity_of_the_ups(ipp):

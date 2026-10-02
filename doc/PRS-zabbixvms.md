@@ -25,7 +25,7 @@
 | UC3-R1 | Sada odesílaných metrik vedená jako tabulka v PRS | Hotovo | tests/test_metrics.py, tests/test_agent.py |
 | UC3-R2 | Sloupce tabulky dostačují k založení položky v Zabbixu | Hotovo | tests/test_metrics.py |
 | UC3-R3 | Metriky bufferů jako souhrn přes nastavené buffery turbíny | Hotovo | tests/test_collector.py |
-| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Hotovo | tests/test_template.py |
+| UC3-R4 | Šablona pro Zabbix v balíčku a stručný návod k jejímu nasazení v `doc/` | Zbývá | |
 | UC4-R1 | Zdroje hodnot metrik popsané tabulkou | Hotovo | tests/test_collector.py |
 | UC4-R2 | Řádek `info` čtený pro každou turbínu podle jejího `system_id` | Hotovo | tests/test_collector_db.py |
 | UC4-R3 | Čtení sloupců `info` podle názvu, ne podle pozice | Hotovo | tests/test_collector_db.py |
@@ -37,7 +37,7 @@
 | UC5-R1 | Logovací soubor s provozními událostmi a chybami | Hotovo | tests/test_log.py |
 | UC5-R2 | Start, zastavení a zásadní chyby ve Windows Event Logu | Hotovo | N/A |
 | UC5-R3 | Vlastní stav agenta odesílaný na host serveru jako dvojice metrik | Hotovo | tests/test_agent.py |
-| UC5-R4 | Triggery turbín a value map stavu agenta v šablonách | Hotovo | tests/test_template.py, tests/test_triggers.py |
+| UC5-R4 | Triggery turbín a value map stavu agenta v šablonách | Zbývá | |
 | UC6-R1 | Seznam prefixů tabulek surových dat v konfiguraci turbíny | Hotovo | tests/test_config.py |
 | UC6-R2 | Tabulka patří k prefixu podle celého názvu `<prefix>_<datum>` | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
 | UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
@@ -50,6 +50,12 @@
 | UC7-R5 | Samostatná šablona pro host serveru | Hotovo | tests/test_template.py |
 | UC7-R6 | Chyba napájení při nabití pod mezí `{$VMS.UPS.CHARGE.MIN}` | Hotovo | tests/test_triggers.py, tests/test_template.py |
 | UC7-R7 | Dokumentace nasazení hostu serveru, sledování UPS a jeho chyb | Hotovo | N/A |
+| UC8-R1 | Tabulka trendových dat, okno čtení a posun času v konfiguraci databáze, výchozí `dukovany_local` | Hotovo | tests/test_config.py, tests/test_collector.py |
+| UC8-R2 | Pole signálů v konfiguraci každé turbíny | Hotovo | tests/test_config.py |
+| UC8-R3 | Stáří signálu z posledního záznamu v okně nejnovějších řádků tabulky | Zbývá | |
+| UC8-R4 | `vms.trend_age` jako nejstarší ze signálů turbíny, levný dotaz | Hotovo | tests/test_collector.py, tests/test_collector_db.py, tests/test_agent.py |
+| UC8-R5 | Chyba trendových dat při stáří přes 5 minut, podmíněná otáčkami | Zbývá | |
+| UC8-R6 | Dokumentace nastavení sledování trendových dat a jeho chyb | Hotovo | N/A |
 
 ## Účel projektu
 
@@ -194,6 +200,7 @@ nastavit.
 - Agent čte konfiguraci ze souboru `C:\ProgramData\LogicElements\ZabbixVms\config.json`.
 - Pokud tento soubor neexistuje, vytvoří se při prvním spuštění z výchozí konfigurace dodané v balíčku.
 - Pokud soubor existuje, agent ho použije a výchozí konfiguraci z balíčku ignoruje.
+- Výchozí konfigurace v balíčku neobsahuje žádné heslo: `database.password` i `server.ups.password` jsou v ní prázdná a obsluha je doplní do konfigurace v `ProgramData`.
 - Instalace ani aktualizace balíčku přes `pip` obsah souboru v `ProgramData` nezmění; jedinou výjimkou je doplnění nových položek instalačním skriptem podle UC2-R10.
 
 ### UC2-R8
@@ -207,7 +214,7 @@ nastavit.
 ### UC2-R9
 **Popis:** Položka, která v konfiguraci chybí, se doplní výchozí hodnotou jen tehdy, když přibyla v novější verzi agenta.
 **DoD:**
-- Položky přidané po první verzi agenta, tedy `period` ve skupině odesílání do Zabbixu, `raw_prefixes` u turbíny a skupina `server` (UC7-R1), se při načtení konfigurace, která je nemá, doplní hodnotou, se kterou agent pracuje stejně jako verze, která je neznala: 5 sekund, prázdný seznam a skupina `server` s vypnutým sledováním UPS.
+- Položky přidané po první verzi agenta, tedy `period` ve skupině odesílání do Zabbixu, `raw_prefixes` u turbíny, skupina `server` (UC7-R1), `trend_table`, `trend_window` a `trend_utc_offset` ve skupině databáze a `trend_signals` u turbíny (UC8-R1, UC8-R2), se při načtení konfigurace, která je nemá, doplní hodnotou, se kterou agent pracuje stejně jako verze, která je neznala: 5 sekund, prázdný seznam, skupina `server` s vypnutým sledováním UPS, tabulka `dukovany_local`, okno 10000 řádků, posun času UTC+1 a prázdný seznam signálů.
 - Konfiguraci, ve které chybí jiná položka, například `system_id` turbíny nebo `location`, agent odmítne jako neplatnou a v chybě uvede, která položka chybí.
 - Chybějící skupina `server` a skupina s prázdným `host` dostanou `host` složený z `location` a `_server`, například `Praha_server`; `host` s vyplněným jménem se nemění.
 - Doplnění probíhá jen v paměti, soubor konfigurace se jím nezmění (UC2-R4).
@@ -243,6 +250,7 @@ Sada metrik odesílaných do Zabbixu:
 | `vms.buf_bulk` | Doba bulk zápisu | Numeric (unsigned) | ms | Součet doby zápisu bulk příkazů do databáze přes buffery turbíny |
 | `vms.raw_tables` | Počet tabulek surových dat | Numeric (unsigned) | | Největší počet tabulek surových dat se stejným prefixem přes prefixy turbíny |
 | `vms.raw_write_age` | Stáří zápisu surových dat | Numeric (unsigned) | s | Doba od posledního zápisu do nejnovější tabulky surových dat u toho prefixu turbíny, který je na tom nejhůř. Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. |
+| `vms.trend_age` | Stáří trendových dat | Numeric (unsigned) | s | Doba od posledního záznamu toho ze sledovaných signálů turbíny, který je na tom nejhůř (UC8). Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. Turbína bez sledovaných signálů ji neodesílá. |
 
 Stav agenta se na hosty turbín neodesílá; nese ho host serveru (UC7).
 
@@ -298,6 +306,7 @@ hodnoty metrik a odešle je do Zabbixu. Zdroj každé metriky určuje tabulka n�
 | `vms.buf_rows` | `information_schema.TABLES` | `database`, bufferové tabulky turbíny | `TABLE_ROWS` | součet hodnot přes nastavené buffery |
 | `vms.raw_tables` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME` | počet tabulek každého prefixu (UC6-R2), největší z nich |
 | `vms.raw_write_age` | `information_schema.TABLES` | `database`, prefixy surových dat turbíny | `TABLE_NAME`, `UPDATE_TIME`, `CREATE_TIME` | stáří `UPDATE_TIME` nejnovější tabulky každého prefixu, u nové tabulky bez zápisu první minutu stáří `CREATE_TIME` (UC6-R5), největší z nich |
+| `vms.trend_age` | tabulka trendových dat | `database`, `trend_table`, `trend_window`, signály turbíny (UC8) | `Id`, `SigID`, `PTimeStamp` | stáří nejnovějšího `PTimeStamp` každého signálu v okně posledních `trend_window` řádků (UC8-R3), největší z nich |
 
 ### UC4-R1
 **Popis:** Zdroj hodnoty každé metriky je popsaný tabulkou zdrojů v tomto use casu.
@@ -405,15 +414,16 @@ Sada triggerů, které šablona turbín obsahuje:
 | Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Chyba exportu surových dat: {ITEM.VALUE} | `vms.raw_tables` | `last({METRIC})>2` | HIGH | – |
 | Chyba zápisu surových dat: {ITEM.VALUE} | `vms.raw_write_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
+| Chyba trendových dat: {ITEM.VALUE} | `vms.trend_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Z hostu nepřišla žádná hodnota 5m | `vms.speed` | `nodata({METRIC},5m)=1` | HIGH | – |
 
 `{METRIC}` v podmínce zastupuje odkaz na metriku ve tvaru `/<název šablony>/<klíč metriky>`.
 Klíč metriky určuje i to, pod kterou položkou šablony trigger v exportu leží.
 
 Sloupec **Závisí na** znamená závislost triggerů v Zabbixu: dokud je uvedený trigger
-v problémovém stavu, závislý trigger se neuplatní. Zatím ho mají vyplněný dva triggery,
-nad `vms.buf_age` a nad `vms.raw_write_age`: stojící turbína do bufferu nic neukládá a
-nezapisuje ani surová data, takže rostoucí stáří zápisu je v takové chvíli očekávané, ne
+v problémovém stavu, závislý trigger se neuplatní. Zatím ho mají vyplněný tři triggery,
+nad `vms.buf_age`, `vms.raw_write_age` a `vms.trend_age`: stojící turbína do bufferu nic neukládá a
+nezapisuje ani surová, ani trendová data, takže rostoucí stáří zápisu je v takové chvíli očekávané, ne
 chyba. Ostatní zdroje běží bez ohledu na otáčky a jejich triggery hlásí pořád; počet tabulek
 surových dat při klidu neroste, protože nové tabulky nevznikají. Přibýt může kterýkoli další
 – stačí do sloupce doplnit jméno blokujícího triggeru.
@@ -599,3 +609,82 @@ Makra šablony serveru:
 - Návod říká, že host serveru je povinný i bez sledování UPS, protože nese stav agenta včetně chyb čtení z databáze.
 - Návod popisuje, co obsluha nastaví ve skupině `server` konfigurace, aby agent začal UPS sledovat.
 - Popis chyb agenta uvádí chyby podle UC7-R3 a kde k nim hledat podrobnosti.
+
+## UC8 – Sledování trendových dat
+
+Aktérem je ten, kdo dohlíží na zpracování vypočtených hodnot. Cílem je poznat, že se přestaly
+zapisovat trendové hodnoty vybraných signálů. Spouštěčem je každý cyklus měření.
+
+Trendová data se zapisují do jedné tabulky databáze `BVMS` pro celého agenta, i když sleduje
+více turbín. Název tabulky patří do konfigurace; ve výchozím stavu je `dukovany_local`. Řádek
+tabulky nese signál (`SigID`), hodnotu, stav, čas zápisu (`PTimeStamp`, typ DATETIME,
+`PMilliSec` jsou jeho milisekundy) a primární klíč `Id`, který roste v pořadí zápisu. Jiný
+index tabulka nemá. Místní databáze má `dukovany_local` jako pracovní kopii se shodnou
+strukturou a daty ze serveru za standardní retenci; tabulka na serverech má řádově miliony
+řádků.
+
+Software, který trendová data zapisuje, razítkuje `PTimeStamp` trvale časem UTC+1 a na letní
+čas nepřechází. V létě je tedy razítko o hodinu za hodinami serveru, v zimě s nimi souhlasí.
+Agent proto bere razítko jako čas v nastaveném pevném pásmu a převádí ho na místní čas serveru.
+
+Každá turbína má pole signálů, například `[-4058, -4060, -4071, -4072, -4075, -4083]`. Agent
+zkontroluje všechny signály z pole, ale odešle jedinou metriku `vms.trend_age` za ten, který je
+nejstarší.
+
+Dotaz musí být levný i pro tabulku s miliony řádků, a to i ve chvíli, kdy některý signál
+přestal chodit, protože právě tu je třeba poznat. Hledat signál přes celou tabulku proto nejde;
+agent čte jen okno posledních řádků podle `Id` (rozsah primárního klíče od konce tabulky).
+Signál, který se v okně nevyskytuje, je starší, než kam okno dosáhne.
+
+### UC8-R1
+**Popis:** Skupina parametrů databáze obsahuje název tabulky trendových dat a velikost okna, ve kterém se čte.
+**DoD:**
+- Skupina obsahuje `trend_table`; není-li uvedená, je to `dukovany_local`.
+- Skupina obsahuje `trend_window`, počet posledních řádků tabulky (podle `Id`), ve kterých se signály hledají; není-li uvedený, je to 10000. Povolený rozsah je 1000 až 1000000, hodnotu mimo rozsah agent odmítne jako neplatnou.
+- Skupina obsahuje `trend_utc_offset`, o kolik celých hodin je `PTimeStamp` před UTC, pevně po celý rok; není-li uvedený, je to 1. Povolené jsou celá čísla od -12 do 14 a `null`, které znamená, že razítko je čas serveru. Jiná hodnota je neplatná konfigurace.
+- Tabulka je jedna pro celého agenta a čtou se z ní signály všech turbín.
+- Agent čte z tabulky uvedené v konfiguraci v databázi z konfigurace.
+- Změna hodnoty se projeví po restartu služby, bez úpravy kódu.
+
+### UC8-R2
+**Popis:** Každá turbína má v konfiguraci pole signálů, jejichž trendová data se sledují.
+**DoD:**
+- U turbíny se nastaví `trend_signals`, seznam celých čísel, `SigID` sledovaných signálů (mohou být záporné).
+- Prázdný seznam je platná konfigurace; turbína bez signálů `vms.trend_age` neodesílá.
+- Konfiguraci s položkou, která není celé číslo, agent odmítne jako neplatnou.
+- Konfigurace zapsaná starší verzí agenta, která `trend_signals` nemá, zůstává platná a její turbíny mají seznam prázdný (UC2-R9).
+
+### UC8-R3
+**Popis:** Stáří signálu je stáří jeho posledního záznamu v okně nejnovějších řádků tabulky trendových dat.
+**DoD:**
+- Okno tvoří řádky s `Id` větším než největší `Id` v tabulce minus `trend_window`; agent ho získá z primárního klíče, nečte celou tabulku a nepoužívá řazení ani filtr přes `SigID` mimo okno.
+- Posledním záznamem signálu je řádek okna s jeho `SigID` a nejnovějším `PTimeStamp`; `PTimeStamp` je čas v pevném pásmu UTC+`trend_utc_offset`, převedený na místní čas serveru včetně letního času, a `PMilliSec` se nepoužívá. Při výchozím posunu je v létě razítko o hodinu za časem serveru a v zimě s ním souhlasí; stáří aktuálně zapisovaného signálu tak není ani v létě, ani v zimě o hodinu vedle.
+- Stáří je počet celých sekund mezi `PTimeStamp` a časem měření a počítá se podle UC4-R4, včetně saturace na jeden měsíc a nuly pro budoucí čas.
+- Signál, který se v okně nevyskytuje, má stáří nejstaršího řádku okna, tedy dolní mez skutečného stáří; je-li okno prázdné (prázdná tabulka), hlásí se jeden měsíc.
+- Záznam s nečitelným `PTimeStamp` se hlásí jako jeden měsíc.
+- Záznam jiného signálu stáří signálu nesnižuje.
+
+### UC8-R4
+**Popis:** Metrika `vms.trend_age` je stáří toho signálu turbíny, který je nejstarší, zjištěné dotazem, který nezatíží databázi.
+**DoD:**
+- Agent zkontroluje každý signál z `trend_signals` turbíny.
+- `vms.trend_age` je největší ze stáří těchto signálů podle UC8-R3.
+- Metrika je v sadě metrik turbín v UC3 a její zdroj v tabulce zdrojů v UC4.
+- Signály jedné turbíny se čtou nejvýš dvěma dotazy, vůči témuž času měření jako ostatní metriky turbíny.
+- Dotaz na tabulce s alespoň 5 miliony řádků i při signálu, který v okně není, trvá nejvýš 100 ms a plán dotazu (`EXPLAIN`) používá jen rozsah primárního klíče, bez průchodu celou tabulkou.
+- Chybějící tabulka trendových dat je samostatná chyba podle UC5-R3 (stav 2, text začíná názvem turbíny); `vms.trend_age` se v tom cyklu neodešle, ale cyklus nekončí a ostatní metriky všech turbín se odešlou.
+
+### UC8-R5
+**Popis:** Šablona turbín hlásí chybu trendových dat, když je nejstarší signál starší než 5 minut a turbína běží.
+**DoD:**
+- Trigger Chyba trendových dat je v tabulce triggerů v UC5 a jeho podmínka je `last(vms.trend_age)>5m`, priorita HIGH.
+- Trigger je závislý na triggeru Turbína pod nominálními otáčkami, takže se neuplatní, dokud je tento trigger v problémovém stavu.
+- Stáří přesně 5 minut problém nehlásí.
+
+### UC8-R6
+**Popis:** Dokumentace popisuje nastavení sledování trendových dat a chyby, které při něm agent hlásí.
+**DoD:**
+- Návod k nastavení Zabbixu popisuje `trend_table`, `trend_window` a `trend_signals` a to, že se sleduje nejstarší signál z pole.
+- Návod říká, že okno musí pokrýt víc než 5 minut zápisu (při dnešních asi 6 řádcích za sekundu stačí 10000 řádků na zhruba 26 minut) a že u pomalejšího zápisu se okno zvětšuje.
+- Návod uvádí, že trigger Chyba trendových dat se za klidu turbíny neuplatní.
+- Popis chyb agenta uvádí chybu chybějící tabulky trendových dat a kde k ní hledat podrobnosti.

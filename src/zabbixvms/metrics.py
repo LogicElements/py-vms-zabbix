@@ -105,6 +105,16 @@ METRICS = (
                     "prefixu turbíny, který je na tom nejhůř. "
                     "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc.",
     ),
+    Metric(
+        key="vms.trend_age",
+        name="Stáří trendových dat",
+        value_type=ValueType.UNSIGNED,
+        units="s",
+        description="Doba od posledního záznamu toho ze sledovaných signálů turbíny, "
+                    "který je na tom nejhůř (UC8). "
+                    "Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. "
+                    "Turbína bez sledovaných signálů ji neodesílá.",
+    ),
 )
 
 @dataclass(frozen=True)
@@ -199,6 +209,13 @@ TRIGGERS = (
     Trigger(
         name="Chyba zápisu surových dat: {ITEM.VALUE}",
         key="vms.raw_write_age",
+        condition="last({METRIC})>5m",
+        priority="HIGH",
+        blocked_by=TURBINE_BELOW_NOMINAL,
+    ),
+    Trigger(
+        name="Chyba trendových dat: {ITEM.VALUE}",
+        key="vms.trend_age",
         condition="last({METRIC})>5m",
         priority="HIGH",
         blocked_by=TURBINE_BELOW_NOMINAL,

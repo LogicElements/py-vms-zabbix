@@ -1,6 +1,6 @@
 """Tests of the configuration: round trip, its place in ProgramData, the accepted
 ranges and the fields a newer agent adds (UC2-R1, UC2-R3, UC2-R4, UC2-R5, UC2-R6,
-UC2-R7, UC2-R9, UC2-R10, UC6-R1, UC7-R1)."""
+UC2-R7, UC2-R9, UC2-R10, UC6-R1, UC7-R1, UC8-R1, UC8-R2)."""
 
 import re
 from pathlib import Path
@@ -12,8 +12,13 @@ from zabbixvms.config import (
     ADDED_FIELDS,
     DEFAULT_IPP_URL,
     DEFAULT_PERIOD,
+    DEFAULT_TREND_TABLE,
+    DEFAULT_TREND_UTC_OFFSET,
+    DEFAULT_TREND_WINDOW,
     MAX_PERIOD,
+    MAX_TREND_WINDOW,
     MIN_PERIOD,
+    MIN_TREND_WINDOW,
     Config,
     ConfigError,
     DatabaseConfig,
@@ -343,21 +348,34 @@ def store_without(path, *fields):
 
 
 # What a file written by the first release of the agent lacks.
-FIRST_RELEASE = [("zabbix", "period"), ("turbines", 0, "raw_prefixes"),
-                 ("turbines", 1, "raw_prefixes"), ("server",)]
+FIRST_RELEASE = [("zabbix", "period"), ("database", "trend_table"),
+                 ("database", "trend_window"), ("database", "trend_utc_offset"),
+                 ("turbines", 0, "raw_prefixes"), ("turbines", 0, "trend_signals"),
+                 ("turbines", 1, "raw_prefixes"), ("turbines", 1, "trend_signals"),
+                 ("server",)]
 
 # Where fill_missing() reports it filled in what FIRST_RELEASE takes out.
-FIRST_RELEASE_FILLED = ["zabbix.period", "turbines[0].raw_prefixes",
-                        "turbines[1].raw_prefixes", "server"]
+FIRST_RELEASE_FILLED = ["zabbix.period", "database.trend_table", "database.trend_window",
+                        "database.trend_utc_offset",
+                        "turbines[0].raw_prefixes", "turbines[0].trend_signals",
+                        "turbines[1].raw_prefixes", "turbines[1].trend_signals", "server"]
 
 
 def test_only_fields_added_after_the_first_release_may_be_missing():
     """UC2-R9: the defaults are what a configuration without the field gets, and they
     are the values the classes themselves start with."""
     assert {kind: set(fields) for kind, fields in ADDED_FIELDS.items()} == {
-        ZabbixConfig: {"period"}, Turbine: {"raw_prefixes"}, Config: {"server"}}
+        ZabbixConfig: {"period"},
+        DatabaseConfig: {"trend_table", "trend_window", "trend_utc_offset"},
+        Turbine: {"raw_prefixes", "trend_signals"},
+        Config: {"server"}}
     assert ADDED_FIELDS[ZabbixConfig]["period"] == DEFAULT_PERIOD == ZabbixConfig().period
     assert ADDED_FIELDS[Turbine]["raw_prefixes"] == [] == Turbine().raw_prefixes
+    assert ADDED_FIELDS[Turbine]["trend_signals"] == [] == Turbine().trend_signals
+    assert ADDED_FIELDS[DatabaseConfig]["trend_table"] == DatabaseConfig().trend_table
+    assert ADDED_FIELDS[DatabaseConfig]["trend_window"] == DatabaseConfig().trend_window
+    assert (ADDED_FIELDS[DatabaseConfig]["trend_utc_offset"]
+            == DatabaseConfig().trend_utc_offset)
 
 
 def test_a_server_group_filled_in_watches_nothing():
@@ -447,6 +465,9 @@ def test_complete_config_writes_in_the_fields_of_a_newer_agent(tmp_path):
     assert stored["zabbix"]["period"] == DEFAULT_PERIOD
     # Each turbine has a list of its own, not a reference to the list of the first.
     assert [turbine["raw_prefixes"] for turbine in stored["turbines"]] == [[], []]
+    assert [turbine["trend_signals"] for turbine in stored["turbines"]] == [[], []]
+    assert stored["database"]["trend_table"] == DEFAULT_TREND_TABLE
+    assert stored["database"]["trend_window"] == DEFAULT_TREND_WINDOW
     assert Config.read(path).fill_missing() == []
 
 
@@ -684,3 +705,153 @@ def test_a_switch_of_the_ups_that_is_not_true_or_false_is_rejected():
 
     with pytest.raises(ConfigError, match="enabled"):
         config.validate()
+
+
+def test_the_trend_table_is_dukovany_local_unless_set():
+    """UC8-R1: a configuration that does not name the table reads the usual one."""
+    assert DEFAULT_TREND_TABLE == "dukovany_local"
+    assert Config().database.trend_table == "dukovany_local"
+    assert Config().database.trend_window == DEFAULT_TREND_WINDOW == 10000
+
+
+def test_the_trend_settings_survive_a_round_trip(tmp_path):
+    """UC8-R1, UC8-R2: the table, the window and the signals are stored and read back."""
+    path = tmp_path / "config.json"
+    Config(database=DatabaseConfig(trend_table="trend_xx", trend_window=5000),
+           turbines=[Turbine(name="TG1", trend_signals=[-4058, 7]),
+                     Turbine(name="TG2")]).store(path)
+
+    loaded = Config.load(path)
+
+    assert loaded.database.trend_table == "trend_xx"
+    assert loaded.database.trend_window == 5000
+    assert loaded.turbines[0].trend_signals == [-4058, 7]
+    assert loaded.turbines[1].trend_signals == []
+
+
+def test_a_turbine_watches_no_trend_signal_unless_set():
+    """UC8-R2: an empty list is valid, and every turbine has a list of its own."""
+    first, second = Turbine(), Turbine()
+    first.trend_signals.append(1)
+
+    assert second.trend_signals == []
+    Config(turbines=[Turbine(), Turbine(trend_signals=[])],
+           server=ServerConfig(host="Praha_server")).validate()
+
+
+def test_trend_signals_may_be_negative_whole_numbers():
+    """UC8-R2: the signals of the VMS carry negative SigID."""
+    Config(turbines=[Turbine(trend_signals=[-4058, -4060, -4071, -4072, -4075, -4083])],
+           server=ServerConfig(host="Praha_server")).validate()
+
+
+@pytest.mark.parametrize("signal", ["-4058", 1.5, None, True, [1, 2]])
+def test_a_trend_signal_that_is_no_whole_number_is_rejected(signal):
+    """UC8-R2: anything but a whole number is refused, a pair included."""
+    with pytest.raises(ConfigError, match="trend signal"):
+        Config(turbines=[Turbine(name="TG1", trend_signals=[-4058, signal])],
+               server=ServerConfig(host="Praha_server")).validate()
+
+
+@pytest.mark.parametrize("window", [MIN_TREND_WINDOW, 10000, MAX_TREND_WINDOW])
+def test_a_trend_window_inside_the_range_is_accepted(window):
+    """UC8-R1: a thousand to a million rows are what may be set."""
+    Config(database=DatabaseConfig(trend_window=window),
+           server=ServerConfig(host="Praha_server")).validate()
+
+
+@pytest.mark.parametrize("window", [0, 999, 1000001, -1, "10000", 5000.0, True])
+def test_a_trend_window_outside_the_range_is_rejected(window):
+    """UC8-R1: anything else is refused, like the other ranges."""
+    with pytest.raises(ConfigError, match="trend_window"):
+        Config(database=DatabaseConfig(trend_window=window),
+               server=ServerConfig(host="Praha_server")).validate()
+
+
+@pytest.mark.parametrize("table", ["", "  ", None])
+def test_an_empty_trend_table_is_rejected(table):
+    """UC8-R1: the table has to have a name."""
+    with pytest.raises(ConfigError, match="trend_table"):
+        Config(database=DatabaseConfig(trend_table=table),
+               server=ServerConfig(host="Praha_server")).validate()
+
+
+def test_a_configuration_without_the_trend_fields_still_loads(tmp_path):
+    """UC2-R9, UC8-R1, UC8-R2: a file of an older agent has none of them, and gets the
+    table of dukovany_local, the usual window and no signal."""
+    path = tmp_path / "config.json"
+    store_without(path, ("database", "trend_table"), ("database", "trend_window"),
+                  ("turbines", 0, "trend_signals"), ("turbines", 1, "trend_signals"))
+
+    loaded = load_config(path)
+
+    assert loaded.database.trend_table == DEFAULT_TREND_TABLE
+    assert loaded.database.trend_window == DEFAULT_TREND_WINDOW
+    assert [turbine.trend_signals for turbine in loaded.turbines] == [[], []]
+
+
+def test_the_default_configuration_has_the_trend_fields():
+    """UC8-R1, UC8-R2: the file the package ships names them, so the operator sees them."""
+    import json
+
+    stored = json.loads(config_module.default_config_bytes())
+
+    assert stored["database"]["trend_table"] == "dukovany_local"
+    assert stored["database"]["trend_window"] == 10000
+    assert stored["turbines"][0]["trend_signals"] == []
+
+
+def test_the_trend_stamps_are_utc_plus_one_unless_set():
+    """UC8-R1: the software that writes them stamps in UTC+1 all year."""
+    assert DEFAULT_TREND_UTC_OFFSET == 1
+    assert Config().database.trend_utc_offset == 1
+
+
+@pytest.mark.parametrize("offset", [None, -12, 0, 1, 2, 14])
+def test_a_trend_offset_inside_the_range_is_accepted(offset, tmp_path):
+    """UC8-R1: a whole number of hours or none at all, and it survives storing."""
+    path = tmp_path / "config.json"
+    config = Config(database=DatabaseConfig(trend_utc_offset=offset),
+                    server=ServerConfig(host="Praha_server"))
+    config.validate()
+    config.store(path)
+
+    assert Config.load(path).database.trend_utc_offset == offset
+
+
+@pytest.mark.parametrize("offset", [-13, 15, 1.5, "1", True])
+def test_a_trend_offset_outside_the_range_is_rejected(offset):
+    """UC8-R1: anything else is refused, like the other ranges."""
+    with pytest.raises(ConfigError, match="trend_utc_offset"):
+        Config(database=DatabaseConfig(trend_utc_offset=offset),
+               server=ServerConfig(host="Praha_server")).validate()
+
+
+def test_a_configuration_without_the_trend_offset_gets_utc_plus_one(tmp_path):
+    """UC2-R9, UC8-R1: a file of 0.5.0 has no offset and is given the default."""
+    path = tmp_path / "config.json"
+    store_without(path, ("database", "trend_utc_offset"))
+
+    assert load_config(path).database.trend_utc_offset == DEFAULT_TREND_UTC_OFFSET
+
+
+def test_the_default_configuration_names_the_trend_offset():
+    """UC8-R1: the shipped file shows the operator the offset."""
+    import json
+
+    stored = json.loads(config_module.default_config_bytes())
+
+    assert stored["database"]["trend_utc_offset"] == 1
+
+
+def test_the_package_carries_no_password():
+    """UC2-R7: neither the shipped configuration nor the defaults of the classes hold a
+    password, so an installation from the package publishes none."""
+    import json
+
+    stored = json.loads(config_module.default_config_bytes())
+
+    assert stored["database"]["password"] == ""
+    assert stored["server"]["ups"]["password"] == ""
+    assert DatabaseConfig().password == ""
+    assert UpsConfig().password == ""

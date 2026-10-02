@@ -126,12 +126,12 @@ def test_every_dependency_names_a_trigger_of_the_catalog():
 
 
 def test_only_what_a_standing_turbine_stops_writing_waits_for_it():
-    """UC5-R4, UC6-R4: a standing turbine stops filling the buffer and the raw data
-    tables, so the triggers on the age of those writes wait for it; the other sources
-    are written whatever the turbine does."""
+    """UC5-R4, UC6-R4, UC8-R5: a standing turbine stops filling the buffer, the raw data
+    tables and the trend data, so the triggers on the age of those writes wait for it;
+    the other sources are written whatever the turbine does."""
     blocked = {trigger.key for trigger in TRIGGERS if trigger.blocked_by}
 
-    assert blocked == {"vms.buf_age", "vms.raw_write_age"}
+    assert blocked == {"vms.buf_age", "vms.raw_write_age", "vms.trend_age"}
     assert all(trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL
                for trigger in TRIGGERS if trigger.blocked_by)
 
@@ -149,6 +149,16 @@ def test_the_raw_data_write_waits_for_a_standing_turbine():
     trigger = next(trigger for trigger in TRIGGERS if trigger.key == "vms.raw_write_age")
 
     assert trigger.condition == "last({METRIC})>5m"
+    assert trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL
+
+
+def test_the_trend_data_age_waits_for_a_standing_turbine():
+    """UC8-R5: five minutes without a trend record, unless the turbine stands."""
+    trigger = next(trigger for trigger in TRIGGERS if trigger.key == "vms.trend_age")
+
+    assert trigger.name == "Chyba trendových dat: {ITEM.VALUE}"
+    assert trigger.condition == "last({METRIC})>5m"
+    assert trigger.priority == "HIGH"
     assert trigger.blocked_by == metrics.TURBINE_BELOW_NOMINAL
 
 

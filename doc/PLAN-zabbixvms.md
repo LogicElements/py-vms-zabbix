@@ -34,6 +34,7 @@
 | 12 | Nová tabulka surových dat bez zápisu | [x] |
 | 13 | Sledování UPS serveru | [x] |
 | 14 | Stav agenta jen na hostu serveru | [x] |
+| 15 | Sledování trendových dat | [ ] |
 
 
 ### Etapa 1 – Kostra balíčku a konfigurace
@@ -466,3 +467,59 @@ zkontrolovat proti hostu v Zabbixu.
 **Ověření na serverech (verze 0.4.1):** balíček se nasadil na všechny servery, obě šablony se
 naimportovaly do Zabbixu a vše funguje. Ruční krok 12 tím prošel, takže UC3-R4 i UC7-R5 jsou
 Hotovo a etapa 14 je dokončená.
+
+### Etapa 15 – Sledování trendových dat
+**Účel:** Odesílat `vms.trend_age` z tabulky trendových dat levným dotazem a hlásit chybu trendových dat.
+**Řeší:** UC2-R9, UC3-R4, UC5-R4, UC8-R1, UC8-R2, UC8-R3, UC8-R4, UC8-R5, UC8-R6
+**Kroky:**
+1. Přidat do `DatabaseConfig` pole `trend_table` (výchozí `dukovany_local`) a `trend_window` (výchozí 10000, rozsah 1000 až 1000000) a do `Turbine` pole `trend_signals` (výchozí prázdný seznam).
+2. Odmítnout v `validate()` `trend_window` mimo rozsah a položku `trend_signals`, která není celé číslo (pravdivostní hodnota `bool` neprojde).
+3. Zařadit nová pole do `ADDED_FIELDS` s výchozími hodnotami, takže je doplní `fill_missing()` i `complete_config()`; doplnit je do `data/config_default.json`.
+4. Napsat testy konfigurace: výchozí hodnoty, uložení a načtení, načtení konfigurace bez nových polí, doplnění přes `complete-config`, odmítnutí `trend_window` mimo rozsah a neceločíselného signálu, prázdný seznam je platný.
+5. Implementovat v `collector.py` čtení okna: `MAX(Id)` z primárního klíče a jeden dotaz `WHERE Id > <max> - trend_window AND SigID IN (...)` se signály všech turbín, seskupený podle `SigID` s `MAX(PTimeStamp)`; název tabulky escapovat jako identifikátor, signály předat jako parametry. Druhým malým dotazem získat `PTimeStamp` nejstaršího řádku okna.
+6. Implementovat výpočet stáří podle UC8-R3 přes stávající výpočet z UC4-R4: signál mimo okno má stáří nejstaršího řádku okna, prázdná tabulka a nečitelný `PTimeStamp` jeden měsíc; `vms.trend_age` je největší ze stáří signálů turbíny, turbína bez signálů metriku neodesílá.
+7. Převést chybějící tabulku trendových dat na chybu čtení z databáze s názvem turbíny a v tom cyklu `vms.trend_age` neodeslat.
+8. Přidat do `metrics.py` metriku `vms.trend_age` do sady turbín a trigger Chyba trendových dat (`last>5m`, HIGH, závislý na Turbína pod nominálními otáčkami); přegenerovat `data/zabbix_template.yaml` s `PYTHONPATH=src`.
+9. Napsat testy collectoru proti podvrženým objektům: okno z `MAX(Id)`, jeden dotaz pro signály více turbín, největší stáří přes signály, signál mimo okno s dolní mezí, prázdná tabulka, nečitelný `PTimeStamp`, turbína bez signálů nic neodešle, budoucí čas jako nula, chybějící tabulka jako chyba.
+10. Napsat testy katalogu a šablony: klíče turbín odpovídají tabulce v PRS včetně `vms.trend_age`, šablona obsahuje právě triggery z tabulky, závislost nového triggeru na otáčkách, stáří přesně 5 minut bez problému.
+11. Napsat databázové testy (značka `db`) nad dočasnou tabulkou téhož tvaru jako `dukovany_local`, kterou test založí a smaže: čtení signálů v okně, signál mimo okno, `EXPLAIN` dotazu používá jen rozsah primárního klíče. Lokální `dukovany_local` zatím data nemá, dokud se do ní nezkopírují ze serveru; testy se na ní nezakládají.
+12. Napsat měřicí test (značky `db` a `slow`) nad dočasnou tabulkou s alespoň 5 miliony řádků: dotaz trvá nejvýš 100 ms i při signálu mimo okno; ve výchozím běhu se přeskočí.
+13. Doplnit dokumentaci: `NAVOD-zabbix.md` (`trend_table`, `trend_window`, `trend_signals`, velikost okna, trigger za klidu turbíny), `CHYBY-agenta.md` (chybějící tabulka trendových dat), `NAVRH-zabbixvms.md` (čtení okna podle `Id`) a úvod `README.md`.
+14. Zvýšit verzi balíčku na 0.5.0, sestavit balíček podle kapitoly Build v `CLAUDE.md` a zkontrolovat složku `offline`.
+15. Po zkopírování dat ze serveru do `dukovany_local` ověřit lokálně: `vms.trend_age` pro signály `[-4058, -4060, -4071, -4072, -4075, -4083]`, `EXPLAIN` a čas dotazu.
+16. Ručně ověřit na serveru po importu šablon: `vms.trend_age` chodí na host turbíny, zastavení zápisu jednoho signálu zvýší hodnotu nad 5 minut a naskočí Chyba trendových dat, při stojící turbíně se trigger neuplatní.
+
+**Stav:** kroky 1 až 15 jsou hotové, testy prošly (483, jeden přeskočený je měřicí test),
+balíček 0.5.0 je sestavený a v `offline` je jediný wheel. UC2-R9, UC8-R1, UC8-R2, UC8-R3,
+UC8-R4 a UC8-R6 jsou Hotovo. UC8-R5, UC3-R4 a UC5-R4 čekají na import šablony a krok 16. Měřicí test na 5 milionech řádků
+(`ZABBIXVMS_SLOW_TESTS=1 pytest -m slow`) prošel za 20 s, z toho téměř všechno je plnění
+tabulky; čtení samo se vešlo do 100 ms.
+
+Co stojí za zapamatování: lokální `dukovany_local` nemá primární klíč na `Id`, přestože
+servery ho mají, takže na ní `EXPLAIN` ukazuje průchod celou tabulkou. Před naplněním
+ji doplnit (`ALTER TABLE dukovany_local ADD PRIMARY KEY (Id)`), jinak bude lokální ověření
+v kroku 15 pomalé a nevypovídající. Chybějící tabulka trendových dat je samostatná chyba
+(stav agenta 2): `vms.trend_age` se neodešle, ale cyklus pokračuje a ostatní metriky všech
+turbín jdou dál. Collector na to má `errors` vedle `warnings`.
+
+**Ověření na skutečných datech (krok 15, 2026-10-01):** `dukovany_local` má 3,77 milionu řádků
+za týden (asi 6 řádků za sekundu), primární klíč `Id` a 46 signálů. Plán obou dotazů je
+`range` přes `PRIMARY` pro okna 1000, 10000 i 100000 řádků. Čtení šesti signálů trvá
+v okně 1000 řádků 1 až 4 ms, v okně 10000 3 až 6 ms a v okně 100000 27 až 31 ms. Všech šest
+signálů je v každém z těch oken; pomalé `-4075` a `-4083` zapisují asi jednou za minutu.
+Okno 1000 řádků sahá jen necelé 3 minuty, pod 5 minut, takže tak malé se nastavit nemá;
+výchozích 10000 řádků pokrývá 27 minut.
+
+Skutečná tabulka má `PTimeStamp` typu `DATETIME` (a `PMilliSec` jako `char(3)`), ne text
+jako první pracovní kopie. Kód četl jen text a u každého signálu by hlásil jeden měsíc;
+zachytilo to až spuštění nad skutečnými daty. Teď čte `datetime` i text a testovací tabulka
+v databázových testech má sloupec stejného typu jako server.
+
+**Posun času razítka (verze 0.5.1, 2026-10-02):** na serveru ukazovalo stáří čerstvě
+zapisovaného signálu přes hodinu. Zapisovací software razítkuje `PTimeStamp` trvale UTC+1
+a na letní čas nepřechází, takže je v létě o hodinu za hodinami serveru. Do skupiny
+`database` přibylo `trend_utc_offset` (výchozí 1, `null` = čas serveru) a `trend_timestamp()`
+razítko jako čas v pevném pásmu převádí na místní čas serveru. Úprava měla DoD UC8-R1,
+UC8-R3 a UC2-R9. UC8-R1 a UC2-R9 jsou po testech zase Hotovo, UC8-R3 zůstává Zbývá, dokud se
+na serveru neověří, že čerstvě zapisovaný signál má malé stáří. Testy kontrolují zimní i letní
+čas i okolí obou přechodů pomocí vlastní zóny CET/CEST, protože na stroji není `tzdata`.

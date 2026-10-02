@@ -146,8 +146,8 @@ v něm neprojeví vůbec, což je záměr.
 
 ### Stojící turbína není chyba
 
-Triggery nad stářím zápisu do bufferu (`vms.buf_age`) a do tabulek surových dat
-(`vms.raw_write_age`) mlčí, dokud jsou otáčky pod mezí makra `{$VMS.SPEED.NOMINAL}`. Stojící
+Triggery nad stářím zápisu do bufferu (`vms.buf_age`), do tabulek surových dat
+(`vms.raw_write_age`) a trendových dat (`vms.trend_age`) mlčí, dokud jsou otáčky pod mezí makra `{$VMS.SPEED.NOMINAL}`. Stojící
 turbína do nich nic neukládá, takže rostoucí stáří je v takové chvíli očekávané. Ostatní
 triggery podmíněné nejsou – zbylé zdroje se plní bez ohledu na otáčky. Řeší to
 závislost na triggeru *Turbína pod nominálními otáčkami*, viz
@@ -161,6 +161,22 @@ varování. Je to totiž přesně ta porucha, kterou mají metriky surových dat
 se hlásí jako jeden měsíc a v Zabbixu se ozve *Chyba zápisu surových dat*. Stejně se ale
 projeví i překlep v prefixu – u chyby hned po nasazení proto nejdřív porovnejte prefixy
 v konfiguraci s názvy tabulek v databázi.
+
+### Chybí tabulka trendových dat
+
+Text chyby: `<název turbíny>: trend table <tabulka> is not in database <databáze>`. Turbína
+má v `trend_signals` signály, ale tabulka z `database.trend_table` v databázi není. Agent to
+hlásí jako chybu, protože bez tabulky nezná stáří signálů: stav agenta na hostu serveru je 2
+a `vms.trend_age` se neodešle. Cyklus tím nekončí, ostatní metriky všech turbín se odešlou
+normálně; chybějící `vms.trend_age` na hostu turbíny se pozná podle stavu agenta.
+
+Zkontrolujte název v `trend_table` proti tabulkám v databázi `BVMS`. Podrobnosti jsou
+v `zabbixvms.log` ve složce s konfigurací. U turbíny, která trendová data nesleduje,
+se k této chybě nedojde, protože se do tabulky vůbec nesahá.
+
+Prázdná tabulka chybou není: stáří signálů se hlásí jako jeden měsíc a ozve se *Chyba
+trendových dat*. Stejně se projeví signál, který v okně `trend_window` není, nebo překlep
+v `SigID`.
 
 ### Pád procesu na nativní úrovni
 

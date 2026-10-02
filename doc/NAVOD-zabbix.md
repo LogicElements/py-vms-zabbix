@@ -55,10 +55,10 @@ turbína považuje za neběžící a trigger *Turbína pod nominálními otáčk
 problémového stavu.
 
 Ten trigger sám o sobě nic nehlásí jako poruchu – jeho smyslem je **umlčet triggery nad
-stářím zápisu do bufferu** (`vms.buf_age`) **a do tabulek surových dat**
-(`vms.raw_write_age`). Stojící turbína do nich nic neukládá, takže by jinak jejich stářím
-poplašila dohled pokaždé, když se zastaví. Oba triggery na něm mají závislost, takže se po
-dobu jeho aktivity neuplatní.
+stářím zápisu do bufferu** (`vms.buf_age`), **do tabulek surových dat**
+(`vms.raw_write_age`) **a trendových dat** (`vms.trend_age`). Stojící turbína do nich nic
+neukládá, takže by jinak jejich stářím poplašila dohled pokaždé, když se zastaví. Všechny
+tři triggery na něm mají závislost, takže se po dobu jeho aktivity neuplatní.
 
 Jakmile zapnete odesílání e-mailů podle kapitoly 5, má to ale jeden důsledek: priorita
 Average dostane tenhle trigger nad prahovou hodnotu, takže při každém zastavení turbíny
@@ -173,6 +173,66 @@ projeví po restartu služby.
 Překlep v prefixu vypadá stejně jako software, který vůbec neběží: prefix nemá žádnou tabulku
 a stáří zápisu se hlásí jako jeden měsíc. Když chyba zápisu přijde hned po nasazení, porovnejte
 nejdřív prefixy s názvy tabulek v databázi.
+
+## 6a. Trendová data
+
+Trendová data se zapisují do jedné tabulky databáze pro celého agenta, i když sleduje víc
+turbín. Agent hlídá, jak staré jsou poslední záznamy vybraných signálů, a do Zabbixu
+posílá jedinou metriku *Stáří trendových dat* (`vms.trend_age`): stáří toho signálu, který
+je nejstarší. Šablona na ni má položku i trigger *Chyba trendových dat*, který se ozve, když
+je stáří přes 5 minut. Za klidu turbíny mlčí, viz kapitola 4.
+
+V Zabbixu se nic nenastavuje, signály se nastavují v konfiguraci agenta:
+
+| Položka | Kde | Význam | Výchozí |
+| --- | --- | --- | --- |
+| `trend_table` | `database` | tabulka trendových dat, jedna pro celého agenta | `dukovany_local` |
+| `trend_window` | `database` | počet nejnovějších řádků tabulky, ve kterých se signály hledají (1000 až 1000000) | 10000 |
+| `trend_utc_offset` | `database` | o kolik hodin je `PTimeStamp` před UTC, pevně po celý rok; `null` = čas serveru | 1 |
+| `trend_signals` | u turbíny | seznam `SigID` sledovaných signálů | `[]` |
+
+```json
+"trend_signals": [-4058, -4060, -4071, -4072, -4075, -4083]
+```
+
+Signály jednotlivých turbín podle stavu k 2026-10-01. U každé turbíny jsou tři signály: VMS,
+TVMS a TEMP (u ETE jen VMS), a tabulka trendových dat se nastavuje podle serveru, na kterém
+agent běží. Čísla v `trend_signals` jsou `SigID`, signály ve sloupci vedle nich jsou ve stejném pořadí.
+
+| Server | `trend_table` | Turbína | `trend_signals` | Signály v tomto pořadí |
+| --- | --- | --- | --- | --- |
+| EDU RB1 | `dukovany_local` | TG11 | `[-4058, -4071, -4075]` | VMS, TVMS, TEMP |
+| EDU RB1 | `dukovany_local` | TG12 | `[-4060, -4072, -4083]` | VMS, TVMS, TEMP |
+| EDU RB2 | `dukovany_local` | TG21 | `[-26016, -26024, -26026]` | VMS, TVMS, TEMP |
+| EDU RB2 | `dukovany_local` | TG22 | `[-27016, -27024, -27026]` | VMS, TVMS, TEMP |
+| EDU RB3 | `dukovany_local` | TG31 | `[-28016, -28024, -28026]` | VMS, TVMS, TEMP |
+| EDU RB3 | `dukovany_local` | TG32 | `[-29016, -29024, -29026]` | VMS, TVMS, TEMP |
+| EDU RB4 | `dukovany_local` | TG41 | `[-30016, -30024, -30026]` | VMS, TVMS, TEMP |
+| EDU RB4 | `dukovany_local` | TG42 | `[-31016, -31024, -31026]` | VMS, TVMS, TEMP |
+| ETE TG1 | `tg1_local` | TG1 | `[-34002]` | VMS |
+| ETE TG2 | `tg2_local` | TG2 | `[202795, 202814, 202833]` | VMS A, VMS B, VMS C |
+
+Kontrolují se všechny signály ze seznamu a odesílá se stáří nejstaršího z nich. Turbína
+s prázdným seznamem metriku vůbec neposílá. Změna se projeví po restartu služby.
+
+**Čas v tabulce a letní čas.** Software, který trendová data zapisuje, razítkuje `PTimeStamp`
+trvale časem UTC+1 a na letní čas nepřechází. V létě je razítko o hodinu za hodinami serveru,
+v zimě s nimi souhlasí. Bez `trend_utc_offset` by agent v létě hlásil u čerstvě zapisovaného
+signálu stáří přes hodinu. Hodnota 1 platí pro tabulky zapisované tímto softwarem. Nastavuje
+se na pevný posun, ne na hodinu navíc: agent razítko převede na místní čas serveru a letní čas
+se tím vyřeší sám. Přičíst konstantu by v zimě posunulo stáří na druhou stranu a zastavený
+zápis by zůstal hodinu bez povšimnutí. Má-li některá tabulka razítka v čase serveru, nastavte
+`"trend_utc_offset": null`.
+
+**Okno musí pokrýt víc než 5 minut zápisu.** Tabulka má miliony řádků a signál, který
+přestal chodit, by se hledal přes všechny. Agent proto čte jen posledních `trend_window`
+řádků podle primárního klíče `Id`. Signál, který v okně není, dostane stáří začátku okna,
+tedy dolní mez skutečného stáří; trigger se ozve správně, jen když okno sahá dál než 5 minut.
+Při zápisu asi 6 řádků za sekundu stačí výchozích 10000 řádků na zhruba 26 minut. Zapisuje-li
+se do tabulky rychleji, okno zvětšete. Hodnotu stáří pak čtěte jako „nejméně“.
+
+Dotaz počítá s tím, že `Id` je primární klíč tabulky. Lokální pracovní kopie `dukovany_local`
+ho mít nemusí, pak je dotaz na ní pomalý; `ALTER TABLE dukovany_local ADD PRIMARY KEY (Id)`.
 
 ## 7. Host serveru: stav agenta a nabití UPS
 

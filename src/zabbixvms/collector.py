@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, tzinfo
 
 import mysql.connector
 from mysql.connector import errorcode
@@ -49,6 +49,15 @@ RAW_DATE_FORMATS = {8: "%Y%m%d", 14: "%Y%m%d%H%M%S"}
 # it is older than this. The system creates the table and writes into it a moment
 # later, and a cycle of the agent can fall in between.
 FRESH_RAW_TABLE = timedelta(minutes=1)
+
+
+# The zone the time of the server is in, None for the one Windows is set to. Only tests
+# put another one here.
+LOCAL_ZONE: tzinfo | None = None
+
+# PTimeStamp of the trend data table is a DATETIME on the servers, which the connector
+# hands over as datetime; a table that keeps it as text writes it in this form.
+TREND_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 class CollectorError(Exception):
@@ -141,6 +150,79 @@ def last_write(table: RawTable | None, now: datetime) -> datetime | None:
     return table.updated
 
 
+@dataclass(frozen=True)
+class TrendWindow:
+    """What the newest rows of the trend data table say about a turbine's signals.
+
+    last holds the newest PTimeStamp of each signal that has a row in the window, None
+    for one that is not a time. oldest is the PTimeStamp of the first row of the window,
+    None when the window is empty or that is not a time.
+    """
+
+    last: dict[int, datetime | None]
+    oldest: datetime | None
+
+
+def trend_timestamp(value: datetime | str | None,
+                    utc_offset: int | None = None) -> datetime | None:
+    """Time in a PTimeStamp of the trend data table as the clock of the server shows it,
+    None for anything unreadable.
+
+    The column is a DATETIME, which arrives as it is; text in the form of
+    TREND_TIMESTAMP_FORMAT is read too, so a table that keeps the time as text
+    works as well. The software that writes it stamps in UTC+1 all year, so with
+    utc_offset the stamp is taken as a time in that fixed zone and turned into local
+    time, which makes the summer time come out right: a constant added to the age would
+    be an hour wrong in winter, and a stopped write would go unnoticed for that hour.
+    """
+    if not isinstance(value, datetime):
+        try:
+            value = datetime.strptime(value, TREND_TIMESTAMP_FORMAT)
+        except (TypeError, ValueError):
+            return None
+    if utc_offset is None:
+        return value
+    try:
+        stamped = value.replace(tzinfo=timezone(timedelta(hours=utc_offset)))
+        return stamped.astimezone(LOCAL_ZONE).replace(tzinfo=None)
+    except (OverflowError, OSError, ValueError):
+        # 0001-01-01 is how "never" is written and has no local time to turn into.
+        return None
+
+
+def trend_age(signals: list[int], window: TrendWindow, now: datetime) -> int:
+    """Age of the signal of the turbine that has gone quiet the longest.
+
+    A signal with no row in the window has been quiet for at least as long as the window
+    reaches back, which is all the query can say without reading the whole table; the
+    first row of the window stands for it. An empty window and a time that cannot be
+    read are as old as an age gets.
+    """
+    return max(
+        (age(window.last.get(signal, window.oldest), now) for signal in signals),
+        default=0,
+    )
+
+
+def trend_queries(table: str, signals: int) -> tuple[str, str]:
+    """The two queries on the trend data table: the newest PTimeStamp of each of that
+    many signals within the window, and the first PTimeStamp of the window.
+
+    Parameters of both are the size of the window first, then the signals. The window
+    is what lies above MAX(Id) less its size; MAX(Id) is read from the end of the
+    primary key and the rest is a range of it.
+    """
+    quoted = "`" + table.replace("`", "``") + "`"
+    in_window = f"`Id` > (SELECT MAX(`Id`) FROM {quoted}) - %s"
+    placeholders = ", ".join(["%s"] * signals)
+    last_query = (f"SELECT `SigID`, MAX(`PTimeStamp`) AS `LastWrite` FROM {quoted} "
+                  f"WHERE {in_window} AND `SigID` IN ({placeholders}) "
+                  f"GROUP BY `SigID`")
+    oldest_query = (f"SELECT `PTimeStamp` FROM {quoted} WHERE {in_window} "
+                    f"ORDER BY `Id` LIMIT 1")
+    return last_query, oldest_query
+
+
 def raw_values(raw_tables: dict[str, list[RawTable]], now: datetime) -> dict[str, int]:
     """Raw data metrics of one turbine, summed up over its prefixes as the worst one.
 
@@ -167,6 +249,9 @@ class Collector:
         # Things worth telling about that do not stop the collection; filled by
         # collect() for the turbine it was called with.
         self.warnings: list[str] = []
+        # What stopped one value from being had while the rest was; the cycle goes on
+        # with the others. Filled by collect() like warnings.
+        self.errors: list[str] = []
 
     def connect(self) -> None:
         """Open the connection to MySQL using the values from the configuration."""
@@ -290,11 +375,50 @@ class Collector:
                         row["CREATE_TIME"]))
         return tables
 
+    def read_trend(self, turbine: Turbine) -> TrendWindow:
+        """Newest PTimeStamp of each signal of the turbine within the newest rows of the
+        trend data table.
+
+        Id is the primary key and grows with the writing, so the newest trend_window rows
+        are a range of it that begins at the end of the index: MAX(Id) is read from the
+        index and nothing in the table is scanned behind that range. Looking a signal up
+        over the whole table would read all of it exactly when the signal has stopped,
+        which is what the metric is there for. Raises CollectorError when the table is
+        not there.
+        """
+        last_query, oldest_query = trend_queries(
+            self._database.trend_table, len(turbine.trend_signals))
+        window = self._database.trend_window
+
+        cursor = self._cursor()
+        try:
+            cursor.execute(last_query, (window, *turbine.trend_signals))
+            last_rows = cursor.fetchall()
+            cursor.execute(oldest_query, (window,))
+            oldest_rows = cursor.fetchall()
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_NO_SUCH_TABLE:
+                raise CollectorError(
+                    f"trend table {self._database.trend_table} is not in database "
+                    f"{self._database.database}") from err
+            raise
+        finally:
+            cursor.close()
+
+        offset = self._database.trend_utc_offset
+        return TrendWindow(
+            last={row["SigID"]: trend_timestamp(row["LastWrite"], offset)
+                  for row in last_rows},
+            oldest=(trend_timestamp(oldest_rows[0]["PTimeStamp"], offset)
+                    if oldest_rows else None),
+        )
+
     def collect(self, turbine: Turbine, now: datetime | None = None) -> dict[str, float]:
         """Values of all collected metrics of one turbine, keyed by metric key."""
         if now is None:
             now = datetime.now()
         self.warnings = []
+        self.errors = []
         info = self.read_info(turbine)
         buffer_rows = self.read_buffer_rows(turbine)
         for table in turbine.buffers:
@@ -304,13 +428,24 @@ class Collector:
                 self.warnings.append(
                     f"buffer table {table!r} is not in database {self._database.database}")
         raw_tables = self.read_raw_tables(turbine)
-        return self.values(turbine, info, buffer_rows, raw_tables, now)
+        # A turbine without signals asks the table nothing. A table that is not there
+        # costs the turbine its trend age and nothing else: the other values do not
+        # come from it, and withholding them would turn a mistake in the name of the
+        # trend table into the silence of the whole turbine.
+        trend = None
+        if turbine.trend_signals:
+            try:
+                trend = self.read_trend(turbine)
+            except CollectorError as err:
+                self.errors.append(str(err))
+        return self.values(turbine, info, buffer_rows, raw_tables, now, trend)
 
     @staticmethod
     def values(turbine: Turbine, info: dict, buffer_rows: dict[str, int],
-               raw_tables: dict[str, list[RawTable]], now: datetime) -> dict[str, float]:
-        """Metric values computed from one info row, the buffer row counts and the
-        raw data tables.
+               raw_tables: dict[str, list[RawTable]], now: datetime,
+               trend: TrendWindow | None = None) -> dict[str, float]:
+        """Metric values computed from one info row, the buffer row counts, the
+        raw data tables and the window of the trend data.
 
         Every value of one cycle is computed against the same measurement time.
         """
@@ -341,6 +476,11 @@ class Collector:
         values["vms.buf_bulk"] = bulk
 
         values.update(raw_values(raw_tables, now))
+
+        # Only a turbine that has signals to watch has an age of them; zero would pass
+        # for data that just arrived.
+        if turbine.trend_signals and trend is not None:
+            values["vms.trend_age"] = trend_age(turbine.trend_signals, trend, now)
 
         return values
 

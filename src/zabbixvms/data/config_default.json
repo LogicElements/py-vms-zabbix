@@ -12,8 +12,11 @@
     "host": "localhost",
     "database": "BVMS",
     "user": "VMS",
-    "password": "Vms2015",
-    "info_table": "info_le"
+    "password": "",
+    "info_table": "info_le",
+    "trend_table": "dukovany_local",
+    "trend_window": 10000,
+    "trend_utc_offset": 1
   },
   "turbines": [
     {
@@ -23,7 +26,8 @@
       "buffers": [
         "buffer_le"
       ],
-      "raw_prefixes": []
+      "raw_prefixes": [],
+      "trend_signals": []
     }
   ],
   "server": {

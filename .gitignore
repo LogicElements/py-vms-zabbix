@@ -74,5 +74,8 @@ config.json
 # agent-general/scripts/sync-skills-links.sh
 /.claude/skills/
 
+# Local settings of the build, such as the password of the test database
+/build.local.bat
+
 # Wheels for the offline installation; the folder keeps only its install script
 /offline/*.whl

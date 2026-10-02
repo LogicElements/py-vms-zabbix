@@ -1,14 +1,16 @@
 """Tests of the collector against faked database objects: the computations of the
 source table, the -1 limit, the zeros of an unconfigured buffer and the raw data tables
 (UC4-R1, UC4-R2, UC4-R3, UC4-R4, UC4-R5, UC4-R7, UC4-R8, UC3-R3, UC6-R2,
-UC6-R3, UC6-R4, UC6-R5)."""
+UC6-R3, UC6-R4, UC6-R5, UC8-R1, UC8-R3, UC8-R4)."""
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 
 import mysql.connector
 import pytest
 from mysql.connector import errorcode
+
+from zabbixvms import collector as collector_module
 
 from zabbixvms import metrics
 from zabbixvms.collector import (
@@ -18,10 +20,13 @@ from zabbixvms.collector import (
     MIN_SPEED,
     Collector,
     CollectorError,
+    TrendWindow,
     age,
     like_prefix,
     raw_table_created,
     speed,
+    trend_age,
+    trend_timestamp,
 )
 from zabbixvms.config import DatabaseConfig, Turbine
 
@@ -86,7 +91,9 @@ class FakeCursor:
             self._fake.settings.append(query)
             return
         self._fake.executed.append((query, params))
-        if " LIKE " in query:
+        if "`PTimeStamp`" in query:
+            self._rows = self._fake.answer_trend(query, params)
+        elif " LIKE " in query:
             patterns = [like_regex(pattern) for pattern in params[1:]]
             self._rows = [
                 {"TABLE_NAME": name, "UPDATE_TIME": updated,
@@ -114,8 +121,12 @@ class FakeCursor:
 
 class FakeConnection:
     def __init__(self, info_rows=(), table_rows=None, raw_tables=None,
-                 raw_created=None, refuse_settings=None):
+                 raw_created=None, refuse_settings=None, trend_rows=None,
+                 trend_table_missing=False):
         self.info_rows = list(info_rows)
+        # Rows of the trend data table as (Id, SigID, PTimeStamp), in the order of Id.
+        self.trend_rows = list(trend_rows or [])
+        self.trend_table_missing = trend_table_missing
         self.table_rows = dict(table_rows or {})
         # Raw data tables by name, each with its UPDATE_TIME.
         self.raw_tables = dict(raw_tables or {})
@@ -132,13 +143,32 @@ class FakeConnection:
         assert dictionary, "the collector must read values by column name"
         return FakeCursor(self)
 
+    def answer_trend(self, query, params):
+        """Rows MySQL would give for the two queries on the trend data table: the window
+        is what lies above MAX(Id) minus the first parameter."""
+        if self.trend_table_missing:
+            raise mysql.connector.errors.ProgrammingError(
+                msg="the trend table is not there", errno=errorcode.ER_NO_SUCH_TABLE)
+        assert "(SELECT MAX(`Id`) FROM" in query, "the window has to come from the index"
+        top = max((row[0] for row in self.trend_rows), default=None)
+        window = [row for row in self.trend_rows
+                  if top is not None and row[0] > top - params[0]]
+        if "GROUP BY" in query:
+            wanted = params[1:]
+            last = {}
+            for _, signal, moment in window:
+                if signal in wanted:
+                    last[signal] = max(last.get(signal, moment), moment)
+            return [{"SigID": signal, "LastWrite": moment} for signal, moment in last.items()]
+        return [{"PTimeStamp": window[0][2]}] if window else []
+
     def close(self):
         self.closed = True
 
 
 def make_collector(connection, info_table="info_le", database="BVMS"):
     config = DatabaseConfig(host="db", database=database, user="u", password="p",
-                            info_table=info_table)
+                            info_table=info_table, trend_utc_offset=None)
     collector = Collector(config, connect=lambda **kwargs: connection)
     collector.connect()
     return collector
@@ -214,6 +244,19 @@ def test_collected_keys_match_the_catalog():
     turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_le"])
     connection = FakeConnection(info_rows=[info_row(SystemId=11)],
                                 table_rows={"buffer_le": 157062})
+
+    values = make_collector(connection).collect(turbine, NOW)
+
+    assert set(values) == set(metrics.COLLECTOR_KEYS) - {"vms.trend_age"}
+
+
+def test_collected_keys_with_trend_signals_are_all_of_the_catalog():
+    """UC3-R1, UC8-R4: a turbine that watches signals fills the whole catalog."""
+    turbine = Turbine(name="TG1", system_id=11, buffers=["buffer_le"],
+                      trend_signals=[-4058])
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)],
+                                table_rows={"buffer_le": 157062},
+                                trend_rows=[(1, -4058, stamp(NOW))])
 
     values = make_collector(connection).collect(turbine, NOW)
 
@@ -773,3 +816,347 @@ def test_another_failure_of_the_setting_is_not_swallowed():
 
     with pytest.raises(mysql.connector.Error):
         make_collector(connection)
+
+
+# --- trend data (UC8) ---------------------------------------------------------------
+
+TREND_SIGNALS = [-4058, -4060, -4071, -4072, -4075, -4083]
+
+
+def stamp(moment):
+    """PTimeStamp as the trend data table holds it: text."""
+    return f"{moment:%Y-%m-%d %H:%M:%S}"
+
+
+def trend_turbine(signals=TREND_SIGNALS, name="TG1"):
+    return Turbine(name=name, system_id=11, trend_signals=list(signals))
+
+
+def read_trend(rows, signals=TREND_SIGNALS, window=10000, table="dukovany_local",
+               utc_offset=None, **connection_args):
+    """TrendWindow the collector reads out of the fake table, with the connection.
+
+    The stamps are taken as the time of the server unless an offset is given."""
+    connection = FakeConnection(trend_rows=rows, **connection_args)
+    config = DatabaseConfig(host="db", database="BVMS", user="u", password="p",
+                            trend_table=table, trend_window=window,
+                            trend_utc_offset=utc_offset)
+    collector = Collector(config, connect=lambda **kwargs: connection)
+    collector.connect()
+    return collector.read_trend(trend_turbine(signals)), connection
+
+
+def trend_values(rows, signals=TREND_SIGNALS, **kwargs):
+    """The age of the quietest of the signals, computed from the rows."""
+    window, _ = read_trend(rows, signals, **kwargs)
+    return trend_age(signals, window, NOW)
+
+
+def rows_of(ages_by_signal, first_id=1):
+    """Rows of the trend data table, one per signal, written the given seconds ago."""
+    return [(first_id + index, signal, stamp(NOW - timedelta(seconds=seconds)))
+            for index, (signal, seconds) in enumerate(ages_by_signal.items())]
+
+
+def test_trend_table_comes_from_the_configuration_and_is_quoted():
+    """UC8-R1: the query reads the table of the configuration, quoted as an identifier."""
+    _, connection = read_trend([], table="trend`x")
+
+    assert all("`trend``x`" in query for query, _ in connection.executed)
+
+
+def test_trend_age_of_the_oldest_signal_is_reported():
+    """UC8-R4: of all the signals of the turbine the one that is quietest decides."""
+    ages = {-4058: 3, -4060: 8, -4071: 2, -4072: 400, -4075: 5, -4083: 60}
+
+    assert trend_values(rows_of(ages)) == 400
+
+
+def test_every_signal_of_the_array_is_checked():
+    """UC8-R4: the signal that decides can be any of them, the first and the last too."""
+    for oldest in TREND_SIGNALS:
+        ages = {signal: 5 for signal in TREND_SIGNALS}
+        ages[oldest] = 301
+
+        assert trend_values(rows_of(ages)) == 301
+
+
+def test_the_last_record_of_a_signal_gives_its_age():
+    """UC8-R3: only the newest row of a signal counts, the older ones are history."""
+    rows = [(1, -4058, stamp(NOW - timedelta(seconds=500))),
+            (2, -4058, stamp(NOW - timedelta(seconds=9))),
+            (3, -4058, stamp(NOW - timedelta(seconds=250)))]
+
+    assert trend_values(rows, signals=[-4058]) == 9
+
+
+def test_a_record_of_another_signal_does_not_make_a_signal_younger():
+    """UC8-R3: the rows of signals the turbine does not watch say nothing about it."""
+    rows = [(1, -4058, stamp(NOW - timedelta(seconds=120))),
+            (2, -9999, stamp(NOW - timedelta(seconds=1)))]
+
+    assert trend_values(rows, signals=[-4058]) == 120
+
+
+def test_the_age_is_whole_seconds():
+    """UC8-R3: the text of PTimeStamp is to the second and the age too."""
+    assert trend_values([(1, -4058, stamp(NOW - timedelta(seconds=42)))],
+                        signals=[-4058]) == 42
+
+
+def test_a_signal_outside_the_window_is_as_old_as_the_window_reaches():
+    """UC8-R3: the first row of the window is all the table says about a signal that
+    is not in it, a lower bound of its age."""
+    rows = [(1, -4058, stamp(NOW - timedelta(seconds=9000))),
+            (100, -4060, stamp(NOW - timedelta(seconds=700))),
+            (101, -4060, stamp(NOW - timedelta(seconds=10))),
+            (102, -4058, stamp(NOW - timedelta(seconds=11)))]
+
+    # Only the rows above 102 - 3 are the window, and -4071 has none of them.
+    assert trend_values(rows, signals=[-4060, -4071], window=3) == 700
+
+
+def test_a_signal_of_the_window_is_not_given_the_age_of_its_beginning():
+    """UC8-R3: the lower bound is for the signals that are missing, not for the rest."""
+    rows = [(100, -4060, stamp(NOW - timedelta(seconds=700))),
+            (101, -4058, stamp(NOW - timedelta(seconds=10)))]
+
+    assert trend_values(rows, signals=[-4058], window=3) == 10
+
+
+def test_an_empty_trend_table_is_a_month_old():
+    """UC8-R3: no row at all is as old as an age gets."""
+    assert trend_values([]) == MAX_AGE_SECONDS
+
+
+def test_a_datetime_column_is_read_as_it_comes():
+    """UC8-R3: PTimeStamp is a DATETIME on the servers, and the connector hands it
+    over as datetime, not as the text a copy with a text column holds."""
+    rows = [(1, -4058, NOW - timedelta(seconds=42)), (2, -4060, NOW - timedelta(seconds=7))]
+
+    assert trend_values(rows, signals=[-4058, -4060]) == 42
+    assert trend_timestamp(NOW) == NOW
+
+
+def test_a_timestamp_that_cannot_be_read_is_a_month_old():
+    """UC8-R3: text that is no time is as old as an age gets."""
+    rows = [(1, -4058, "not a time"), (2, -4060, stamp(NOW))]
+
+    assert trend_values(rows, signals=[-4058, -4060]) == MAX_AGE_SECONDS
+    assert trend_timestamp(None) is None
+    assert trend_timestamp("2026-13-45 99:99:99") is None
+    assert trend_timestamp("2026-09-14 12:00:00") == NOW
+
+
+def test_trend_age_saturates_and_a_future_time_is_zero():
+    """UC8-R3: the age is computed as every other, by UC4-R4."""
+    old = [(1, -4058, stamp(NOW - timedelta(days=90)))]
+    future = [(1, -4058, stamp(NOW + timedelta(minutes=5)))]
+
+    assert trend_values(old, signals=[-4058]) == MAX_AGE_SECONDS
+    assert trend_values(future, signals=[-4058]) == 0
+
+
+def test_a_turbine_without_signals_has_no_trend_age_and_asks_nothing():
+    """UC8-R2, UC8-R4: nothing to watch, so no metric and no query on the table."""
+    turbine = Turbine(name="TG1", system_id=11)
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)],
+                                trend_rows=[(1, -4058, stamp(NOW))])
+
+    values = make_collector(connection).collect(turbine, NOW)
+
+    assert "vms.trend_age" not in values
+    assert not any("PTimeStamp" in query for query, _ in connection.executed)
+
+
+def test_the_signals_of_a_turbine_are_read_by_two_queries_on_a_window():
+    """UC8-R4: one for the signals, one for the beginning of the window, both bounded
+    by the range of Id that comes from the end of the table."""
+    _, connection = read_trend(rows_of({-4058: 3}), window=5000)
+
+    queries = list(connection.executed)
+    assert len(queries) == 2
+    for query, params in queries:
+        assert "`Id` > (SELECT MAX(`Id`) FROM `dukovany_local`) - %s" in query
+        assert params[0] == 5000
+    assert queries[0][1][1:] == tuple(TREND_SIGNALS)
+
+
+def test_a_missing_trend_table_is_an_error_naming_it():
+    """UC8-R4: the table is not there, the turbine cannot be read."""
+    with pytest.raises(CollectorError, match="trend table dukovany_local"):
+        read_trend([], trend_table_missing=True)
+
+
+def test_a_missing_trend_table_costs_only_the_trend_age():
+    """UC8-R4: the other values of the turbine are collected, the error is told apart
+    from the warnings and gone with the next collection."""
+    turbine = trend_turbine([-4058])
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)], trend_table_missing=True)
+    collector = make_collector(connection)
+
+    values = collector.collect(turbine, NOW)
+
+    assert "vms.trend_age" not in values
+    assert set(values) == set(metrics.COLLECTOR_KEYS) - {"vms.trend_age"}
+    assert len(collector.errors) == 1 and "trend table dukovany_local" in collector.errors[0]
+    assert collector.warnings == []
+
+    connection.trend_table_missing = False
+    connection.trend_rows = [(1, -4058, stamp(NOW))]
+    collector.collect(turbine, NOW)
+
+    assert collector.errors == []
+
+
+def test_other_database_errors_are_not_turned_into_a_missing_table():
+    """UC8-R4: only a table that is not there is told apart."""
+    connection = FakeConnection()
+
+    def lost(query, params):
+        raise mysql.connector.errors.OperationalError(msg="gone", errno=2013)
+
+    connection.answer_trend = lost
+    collector = Collector(DatabaseConfig(), connect=lambda **kwargs: connection)
+    collector.connect()
+
+    with pytest.raises(mysql.connector.errors.OperationalError):
+        collector.read_trend(trend_turbine())
+
+
+def test_the_signals_of_another_turbine_do_not_enter_the_age():
+    """UC8-R4: every turbine has the age of its own signals."""
+    rows = rows_of({-4058: 5, -4060: 900})
+    window, _ = read_trend(rows, signals=[-4058, -4060])
+
+    assert trend_age([-4058], window, NOW) == 5
+    assert trend_age([-4060], window, NOW) == 900
+
+
+def test_trend_age_of_no_signal_is_zero():
+    """A turbine without signals never gets here, but an age of nothing is no age."""
+    assert trend_age([], TrendWindow(last={}, oldest=None), NOW) == 0
+
+
+def test_the_trend_age_is_one_of_the_values_of_a_collection():
+    """UC8-R4: it is computed against the same time as the rest of the values."""
+    turbine = trend_turbine([-4058])
+    connection = FakeConnection(info_rows=[info_row(SystemId=11)],
+                                trend_rows=[(1, -4058, stamp(NOW - timedelta(seconds=77)))])
+
+    values = make_collector(connection).collect(turbine, NOW)
+
+    assert values["vms.trend_age"] == 77
+
+
+class Prague(tzinfo):
+    """CET in winter and CEST in summer, with the European rule for the change: the last
+    Sunday of March to the last Sunday of October, both at 01:00 UTC. The tests need a
+    zone with summer time and no zone database is installed to supply one."""
+
+    @staticmethod
+    def _last_sunday(year, month):
+        day = datetime(year, month, 31 if month in (3, 10) else 30, 1)
+        return day - timedelta(days=(day.weekday() + 1) % 7)
+
+    def utcoffset(self, moment):
+        if moment is None:
+            return timedelta(hours=1)
+        naive = moment.replace(tzinfo=None)
+        start, end = self._last_sunday(naive.year, 3), self._last_sunday(naive.year, 10)
+        # Local times of the change: 02:00 CET and 03:00 CEST.
+        summer = start + timedelta(hours=1) <= naive < end + timedelta(hours=2)
+        return timedelta(hours=2 if summer else 1)
+
+    def dst(self, moment):
+        return self.utcoffset(moment) - timedelta(hours=1)
+
+    def tzname(self, moment):
+        return "CEST" if self.dst(moment) else "CET"
+
+    def fromutc(self, moment):
+        naive = moment.replace(tzinfo=None)
+        start, end = self._last_sunday(naive.year, 3), self._last_sunday(naive.year, 10)
+        summer = start <= naive < end
+        return (naive + timedelta(hours=2 if summer else 1)).replace(tzinfo=self)
+
+
+@pytest.fixture()
+def prague(monkeypatch):
+    """The clock of the server in Czechia, whatever the machine of the test says."""
+    monkeypatch.setattr(collector_module, "LOCAL_ZONE", Prague())
+
+
+def test_a_stamp_in_fixed_utc_plus_one_is_an_hour_behind_in_summer(prague):
+    """UC8-R1, UC8-R3: the writer stamps 11:00 for what the clocks of the server show as
+    12:00 in summer, so the stamp is moved on by the hour."""
+    stamped = datetime(2026, 10, 2, 11, 0, 0)
+
+    assert trend_timestamp(stamped, utc_offset=1) == datetime(2026, 10, 2, 12, 0, 0)
+
+
+def test_a_stamp_in_fixed_utc_plus_one_is_the_time_of_the_server_in_winter(prague):
+    """UC8-R1, UC8-R3: in winter the server shows UTC+1 too, so nothing is moved; a
+    constant of an hour added all year would be wrong here."""
+    stamped = datetime(2026, 1, 15, 11, 0, 0)
+
+    assert trend_timestamp(stamped, utc_offset=1) == stamped
+
+
+@pytest.mark.parametrize("stamped, local", [
+    # Summer time starts at 02:00 CET on 2026-03-29. The stamps are CET, so up to 01:59
+    # they are the local time, and 02:00 is 03:00 CEST: the clocks skip the hour.
+    (datetime(2026, 3, 29, 1, 59), datetime(2026, 3, 29, 1, 59)),
+    (datetime(2026, 3, 29, 2, 0), datetime(2026, 3, 29, 3, 0)),
+    # It ends at 03:00 CEST on 2026-10-25: the stamp 01:59 is 02:59 CEST, 02:00 is 02:00 CET.
+    (datetime(2026, 10, 25, 1, 59), datetime(2026, 10, 25, 2, 59)),
+    (datetime(2026, 10, 25, 2, 0), datetime(2026, 10, 25, 2, 0)),
+])
+def test_the_stamps_around_the_change_of_the_time_come_out_right(prague, stamped, local):
+    """UC8-R3: the conversion follows the change of the time, not a constant."""
+    assert trend_timestamp(stamped, utc_offset=1) == local
+
+
+def test_the_age_of_a_current_signal_is_no_longer_an_hour_in_summer(prague):
+    """UC8-R3: what was seen on the servers: a signal written just now, stamped an hour
+    behind, no longer reads as an hour old."""
+    now = datetime(2026, 10, 2, 12, 0, 20)
+    rows = [(1, -4058, datetime(2026, 10, 2, 11, 0, 5))]
+    window, _ = read_trend(rows, signals=[-4058], utc_offset=1)
+
+    assert trend_age([-4058], window, now) == 15
+
+
+def test_a_stopped_signal_is_noticed_in_winter_too(prague):
+    """UC8-R3: the same stamp of 10 minutes ago reads as 10 minutes in winter, so a
+    write that stopped is not hidden by an hour."""
+    now = datetime(2026, 1, 15, 12, 0, 0)
+    rows = [(1, -4058, datetime(2026, 1, 15, 11, 50, 0))]
+    window, _ = read_trend(rows, signals=[-4058], utc_offset=1)
+
+    assert trend_age([-4058], window, now) == 600
+
+
+def test_without_an_offset_the_stamp_is_the_time_of_the_server(prague):
+    """UC8-R1: a table that is stamped by the clock of the server is taken as it is."""
+    stamped = datetime(2026, 10, 2, 11, 0, 0)
+
+    assert trend_timestamp(stamped) == stamped
+    assert trend_timestamp(stamped, utc_offset=None) == stamped
+
+
+def test_a_zero_offset_reads_the_stamp_as_utc(prague):
+    """UC8-R1: 0 is UTC itself, two hours behind the server in summer."""
+    assert trend_timestamp(datetime(2026, 10, 2, 10, 0, 0), utc_offset=0) == \
+        datetime(2026, 10, 2, 12, 0, 0)
+
+
+def test_a_text_stamp_is_moved_like_a_datetime(prague):
+    """UC8-R3: a table that keeps the time as text is moved the same."""
+    assert trend_timestamp("2026-10-02 11:00:00", utc_offset=1) == datetime(2026, 10, 2, 12)
+
+
+def test_a_stamp_with_no_local_time_is_unreadable_not_an_error():
+    """UC8-R3: 0001-01-01 is how never is written and reaches no local time; it reads as
+    a month like any stamp that cannot be read."""
+    assert trend_timestamp(datetime(1, 1, 1), utc_offset=1) is None

@@ -27,12 +27,15 @@ from zabbixvms.ups import IppClient, IppError
 
 
 class FakeCollector:
-    def __init__(self, values=None, fail_on=(), warnings=(), connect_fails=False):
+    def __init__(self, values=None, fail_on=(), warnings=(), connect_fails=False,
+                 errors=()):
         self.values = values if values is not None else {"vms.speed": 1.0}
         self.fail_on = set(fail_on)
         self.connect_fails = connect_fails
         self.warnings = list(warnings)
         self._warn = list(warnings)
+        self.errors = list(errors)
+        self._err = list(errors)
         self.collected = []
         self.connects = 0
         self.closes = 0
@@ -53,6 +56,7 @@ class FakeCollector:
     def collect(self, turbine, now=None):
         self.collected.append(turbine.name)
         self.warnings = list(self._warn)
+        self.errors = list(self._err)
         if len(self.collected) in self.fail_on:
             raise RuntimeError("database is away")
         return dict(self.values)
@@ -343,6 +347,54 @@ def test_warning_reports_one_and_its_text():
     assert sender.server_states[0][1][STATUS_KEY] == WARNING
     assert sender.server_states[0][1][ERROR_KEY].startswith("TG1: ")
     assert "buffer_le" in sender.server_states[0][1][ERROR_KEY]
+
+
+def test_an_error_that_costs_one_value_is_state_two_and_the_values_still_go():
+    """UC5-R3, UC8-R4: a missing trend table is an error of its own, named by the turbine,
+    and the cycle carries on with the values it has."""
+    collector = FakeCollector(errors=["trend table dukovany_local is not in database BVMS"])
+    sender = FakeSender()
+    agent, _ = make_agent(collector=collector, sender=sender, cycles=1)
+
+    agent.run()
+
+    assert agent.status == ERROR
+    assert sender.sent == [("TG1", {"vms.speed": 1.0})]
+    assert sender.server_states[0][1][STATUS_KEY] == ERROR
+    assert sender.server_states[0][1][ERROR_KEY] == (
+        "TG1: trend table dukovany_local is not in database BVMS")
+
+
+def test_such_an_error_does_not_stop_the_turbines_after_it():
+    """UC8-R4: every turbine is read, and each one that lost a value is named."""
+    turbines = [Turbine(name="TG1", system_id=11), Turbine(name="TG2", system_id=12)]
+    collector = FakeCollector(errors=["trend table x is not in database BVMS"])
+    sender = FakeSender()
+    agent, _ = make_agent(turbines, collector=collector, sender=sender, cycles=1)
+
+    agent.run()
+
+    assert collector.collected == ["TG1", "TG2"]
+    assert [name for name, _ in sender.sent] == ["TG1", "TG2"]
+    assert sender.server_states[0][1][ERROR_KEY] == (
+        "TG1: trend table x is not in database BVMS; "
+        "TG2: trend table x is not in database BVMS")
+
+
+def test_the_error_goes_before_a_warning_and_is_not_an_unreachable_zabbix():
+    """UC5-R3: the worst of the problems is the state, the error text comes first, and
+    the connection to the database is kept since nothing broke it."""
+    collector = FakeCollector(errors=["trend table x is not in database BVMS"],
+                              warnings=["buffer table 'b' is not in database BVMS"])
+    sender = FakeSender()
+    agent, _ = make_agent(collector=collector, sender=sender, cycles=2)
+
+    agent.run()
+
+    assert sender.server_states[0][1][ERROR_KEY].startswith("TG1: trend table x")
+    assert "buffer table" in sender.server_states[0][1][ERROR_KEY]
+    # Two cycles ran on the one connection; nothing dropped it.
+    assert collector.connects == 1 and agent.failed_sends == 0
 
 
 def test_failed_cycle_reports_two_and_the_error():

@@ -41,10 +41,10 @@ src/zabbixvms/
 
 | Modul | Odpovědnost | Requirementy |
 | --- | --- | --- |
-| `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů a prefixů surových dat, skupina `server` s přístupem k IPP, doplnění položek z novějších verzí v paměti i do souboru | UC2-R1 až UC2-R10, UC6-R1, UC7-R1 |
+| `config.py` | načtení a uložení konfigurace, cesta do `ProgramData`, nasazení výchozí konfigurace z balíčku, kontrola rozsahů a prefixů surových dat, skupina `server` s přístupem k IPP, tabulka a okno trendových dat a jejich signály u turbíny, doplnění položek z novějších verzí v paměti i do souboru | UC2-R1 až UC2-R10, UC6-R1, UC7-R1, UC8-R1, UC8-R2 |
 | `log.py` | logovací soubor vedle konfigurace, rotace, souběžný zápis služby i tray aplikace, zápis do Event Logu | UC5-R1, UC5-R2 |
 | `metrics.py` | definice metrik: klíč, název, typ hodnoty, jednotka, popis; definice triggerů: název, klíč metriky, podmínka, priorita; zvlášť pro hosty turbín a pro host serveru | UC3-R1, UC3-R2, UC5-R4, UC7-R5 |
-| `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů a tabulek surových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC4-R8, UC6-R2 až UC6-R5 |
+| `collector.py` | čtení řádku informační tabulky, počtů řádků bufferů, tabulek surových dat a okna trendových dat, výpočet hodnot | UC4-R1 až UC4-R5, UC4-R7, UC4-R8, UC6-R2 až UC6-R5, UC8-R3, UC8-R4 |
 | `ups.py` | přihlášení k Eaton IPP, držení session, nejnižší nabití přes UPS, chyby čtení | UC7-R2, UC7-R3 |
 | `sender.py` | odeslání hodnot trapperem pod hostem `<location>_<turbína>` nebo pod hostem serveru, kontrola odmítnutých hodnot | UC2-R2, UC2-R5, UC7-R2 |
 | `agent.py` | cyklus přes turbíny a server, jeden společný stav agenta odesílaný na host serveru, prodleva mezi cykly, pokračování po chybě cyklu | UC1-R4, UC4-R6, UC5-R3, UC7-R3, UC7-R4 |
@@ -123,6 +123,41 @@ nepřipojil znovu. Na serveru to vypadalo takto: při přepnutí tabulek se hlá
 staré tabulky a u jedné turbíny se počítaly dvě tabulky, přestože nové připojení vidělo
 jednu. Agent se proto připojuje s `autocommit=True` (UC4-R8). Na lokální MySQL 5.7 se to
 projevit nemohlo: `information_schema` tam transakční není a tabulky jsou MyISAM.
+
+### Trendová data se čtou z okna posledních řádků
+
+Čtvrtý dotaz (UC8) hledá, kdy se naposledy zapsal každý ze sledovaných signálů. Tabulka
+trendových dat má miliony řádků a kromě primárního klíče `Id` nemá index, takže hledat
+signál přes `SigID` by znamenalo projít celou tabulku, a to právě ve chvíli, kdy signál
+přestal chodit a v tabulce už je jen hluboko. `Id` roste v pořadí zápisu, proto agent čte
+jen okno posledních `trend_window` řádků:
+
+```sql
+SELECT SigID, MAX(PTimeStamp) FROM <tabulka>
+WHERE Id > (SELECT MAX(Id) FROM <tabulka>) - <okno> AND SigID IN (...) GROUP BY SigID
+```
+
+`MAX(Id)` se čte z konce indexu a zbytek je rozsah primárního klíče (`type: range`,
+`key: PRIMARY`), jeho cena tedy nezávisí na velikosti tabulky. Druhý dotaz čte `PTimeStamp`
+prvního řádku okna. Signál, který v okně není, je starší, než kam okno dosahuje, a dostane
+jeho stáří jako dolní mez; kdyby se jeho stáří hledalo dál, vrátila by se cena celé tabulky.
+`PTimeStamp` je sloupec DATETIME, který konektor předá jako `datetime`. Přečte se i text
+`yyyy-mm-dd HH:MM:SS`, kdyby ho někde tabulka držela jako text (lokální kopie ho tak
+chvíli měla); hodnota, která čas není, se hlásí jako jeden měsíc.
+
+Čas je druhá past. Zapisovací software razítkuje trvale časem UTC+1 a na letní čas nepřechází,
+takže `PTimeStamp` je v létě o hodinu za hodinami serveru. Agent proto razítko bere jako čas
+v pevném pásmu `trend_utc_offset` (výchozí 1) a `trend_timestamp()` ho převede na místní čas
+serveru přes `astimezone()`, které letní čas zná. Přičíst konstantu nejde: v zimě, kdy je
+místní čas UTC+1, by posunula stáří na druhou stranu a zastavený zápis by zůstal hodinu bez
+povšimnutí. Razítko `0001-01-01`, kterým databáze říká „nikdy“, místní čas nemá; hlásí se jako
+jeden měsíc. Pásmo místního času je v testech nahrazené proměnnou `LOCAL_ZONE`, aby výsledek
+nezávisel na stroji, na kterém běží.
+
+Dotazy sestavuje `trend_queries()` a plán jim ověřují databázové testy. Na tabulce s pěti
+miliony řádků trvá čtení pod 100 ms (`ZABBIXVMS_SLOW_TESTS=1 pytest -m slow`). Lokální
+`dukovany_local` zkopírovaná bez primárního klíče tenhle plán nemá a dotaz na ní prochází
+tabulku celou.
 
 ### Nabití UPS se čte z webového rozhraní Eaton IPP
 

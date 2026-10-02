@@ -59,6 +59,8 @@ class Agent:
         self._sleep = sleep
         self._running = False
         self._warnings: list[str] = []
+        # What could not be read while the cycle still delivered the rest of the values.
+        self._errors: list[str] = []
         # Reads the UPS of the server; None while the configuration does not watch it.
         self.ups = None
         if config.server.ups.enabled:
@@ -88,6 +90,7 @@ class Agent:
     def cycle(self) -> None:
         """One measurement cycle: every turbine collected and sent."""
         self._warnings = []
+        self._errors = []
         self._turbine_in_work = None
         if not self._collector.is_connected:
             self._collector.connect()
@@ -96,6 +99,8 @@ class Agent:
             values = self._collector.collect(turbine)
             self._warnings.extend(f"{turbine.name}: {warning}"
                                   for warning in self._collector.warnings)
+            self._errors.extend(f"{turbine.name}: {error}"
+                                for error in self._collector.errors)
             self._sender.send(turbine, values)
 
     def server_cycle(self) -> None:
@@ -132,16 +137,17 @@ class Agent:
         try:
             self.cycle()
             self.last_error = None
-            status, message = self._state_of_the_cycle()
+            # An error the cycle went on after is still a cycle whose values arrived.
+            return (True, *self._state_of_the_cycle())
         except ZabbixUnreachable as err:
             return err, OK, ""
         except Exception as err:
             # The loop outlives the cycle; the database or Zabbix may come back.
             self.last_error = err
-            status, message = ERROR, self._about_turbine(self._turbine_in_work, err)
+            message = self._about_turbine(self._turbine_in_work, err)
             log.error("measurement cycle failed: %s", message)
             self._collector.close()
-        return status != ERROR, status, message
+            return False, ERROR, message
 
     def _run_server(self):
         """The part of the cycle for the server, answering like _run_turbines()."""
@@ -201,7 +207,15 @@ class Agent:
                       self._config.server.host, err)
 
     def _state_of_the_cycle(self) -> tuple[int, str]:
-        """Status and text after a cycle that got through without an exception."""
+        """Status and text after a cycle that got through without an exception.
+
+        An error a turbine lost one value to counts as an error, the worst of what
+        happened, and its text goes in front of the warnings.
+        """
+        if self._errors:
+            message = "; ".join(self._errors + self._warnings)
+            log.error("measurement cycle finished with an error: %s", message)
+            return ERROR, message
         if not self._warnings:
             return OK, ""
         message = "; ".join(self._warnings)

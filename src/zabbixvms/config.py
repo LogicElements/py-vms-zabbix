@@ -35,6 +35,23 @@ DEFAULT_PERIOD = 5
 MIN_PERIOD = 5
 MAX_PERIOD = 120
 
+# Trend data table and how many of its newest rows the age of a signal is looked for in.
+# The table is the one of dukovany_local; the window keeps the query off the millions of
+# rows behind it, see UC8.
+DEFAULT_TREND_TABLE = "dukovany_local"
+DEFAULT_TREND_WINDOW = 10000
+MIN_TREND_WINDOW = 1000
+MAX_TREND_WINDOW = 1000000
+
+# The software that writes the trend data stamps the rows in UTC+1 all year round and
+# never moves to summer time, so in summer its PTimeStamp is an hour behind the clock of
+# the server. The offset, in hours, says what zone the stamps are in; the agent turns
+# them into the time of the server, summer time included. None means the stamps are
+# already the time of the server.
+DEFAULT_TREND_UTC_OFFSET = 1
+MIN_TREND_UTC_OFFSET = -12
+MAX_TREND_UTC_OFFSET = 14
+
 # Eaton IPP answers on the server it runs on; plain HTTP on 4679 only redirects here.
 DEFAULT_IPP_URL = "https://localhost:4680"
 
@@ -60,13 +77,46 @@ class DatabaseConfig:
     """Connection to the MySQL database written by the VMS server software."""
 
     def __init__(self, host: str = "localhost", database: str = "BVMS", user: str = "VMS",
-                 password: str = "Vms2015", info_table: str = "info_le") -> None:
+                 password: str = "", info_table: str = "info_le",
+                 trend_table: str = DEFAULT_TREND_TABLE,
+                 trend_window: int = DEFAULT_TREND_WINDOW,
+                 trend_utc_offset: int | None = DEFAULT_TREND_UTC_OFFSET) -> None:
         self.host = host
         self.database = database
         self.user = user
-        # Stored in plain text on purpose, see UC2-R6.
+        # Stored in plain text on purpose, see UC2-R6. There is none in the package, the
+        # operator writes it into the configuration in ProgramData.
         self.password = password
         self.info_table = info_table
+        # One table of trend data for the whole agent, whatever the turbines are.
+        self.trend_table = trend_table
+        # Newest rows of it, by Id, in which the signals are looked for.
+        self.trend_window = trend_window
+        # Hours the PTimeStamp of the trend data is ahead of UTC, fixed all year; None when
+        # it is the time of the server.
+        self.trend_utc_offset = trend_utc_offset
+
+    def validate(self) -> None:
+        """Raise ConfigError when the trend table has no name, the window of rows read
+        from it is outside the range or the offset of its time stamps is not a whole
+        number of hours."""
+        if not isinstance(self.trend_table, str) or not self.trend_table.strip():
+            raise ConfigError("database.trend_table is empty")
+        window = self.trend_window
+        if (not isinstance(window, int) or isinstance(window, bool)
+                or window < MIN_TREND_WINDOW or window > MAX_TREND_WINDOW):
+            raise ConfigError(
+                f"trend_window is {window!r} rows, "
+                f"{MIN_TREND_WINDOW} to {MAX_TREND_WINDOW} are supported"
+            )
+        offset = self.trend_utc_offset
+        if offset is not None and (
+                not isinstance(offset, int) or isinstance(offset, bool)
+                or offset < MIN_TREND_UTC_OFFSET or offset > MAX_TREND_UTC_OFFSET):
+            raise ConfigError(
+                f"trend_utc_offset is {offset!r} hours, a whole number from "
+                f"{MIN_TREND_UTC_OFFSET} to {MAX_TREND_UTC_OFFSET} or null is expected"
+            )
 
 
 class Turbine:
@@ -75,16 +125,20 @@ class Turbine:
 
     def __init__(self, name: str = "TEST", system_id: int = 10,
                  buffers: list[str] | None = None,
-                 raw_prefixes: list[str] | None = None) -> None:
+                 raw_prefixes: list[str] | None = None,
+                 trend_signals: list[int] | None = None) -> None:
         self.name = name
         self.system_id = system_id
         self.buffers = list(buffers) if buffers is not None else []
         # Raw data tables of VMS and TVMS alike, named <prefix>_<date>, see UC6.
         self.raw_prefixes = list(raw_prefixes) if raw_prefixes is not None else []
+        # SigID of the signals whose trend data have to keep coming, see UC8.
+        self.trend_signals = list(trend_signals) if trend_signals is not None else []
 
     def validate(self) -> None:
-        """Raise ConfigError when the turbine has more buffers than the agent supports
-        or a raw data prefix that is not a plain table name."""
+        """Raise ConfigError when the turbine has more buffers than the agent supports,
+        a raw data prefix that is not a plain table name or a trend signal that is not
+        a whole number."""
         if len(self.buffers) > MAX_BUFFERS:
             raise ConfigError(
                 f"turbine {self.name!r} has {len(self.buffers)} buffers, "
@@ -95,6 +149,13 @@ class Turbine:
                 raise ConfigError(
                     f"turbine {self.name!r} has raw data prefix {prefix!r}, only "
                     f"letters, digits and underscores are allowed"
+                )
+        # A bool is an int to Python, and true would quietly stand for signal 1.
+        for signal in self.trend_signals:
+            if not isinstance(signal, int) or isinstance(signal, bool):
+                raise ConfigError(
+                    f"turbine {self.name!r} has trend signal {signal!r}, "
+                    f"a whole number is expected"
                 )
 
 
@@ -167,6 +228,7 @@ class Config:
                 f"period is {period!r} seconds, "
                 f"{MIN_PERIOD} to {MAX_PERIOD} are supported"
             )
+        self.database.validate()
         for turbine in self.turbines:
             turbine.validate()
         self.server.validate()
@@ -295,7 +357,10 @@ class Config:
 # wrong values instead of refusing to start.
 ADDED_FIELDS = {
     ZabbixConfig: {"period": DEFAULT_PERIOD},
-    Turbine: {"raw_prefixes": []},
+    DatabaseConfig: {"trend_table": DEFAULT_TREND_TABLE,
+                     "trend_window": DEFAULT_TREND_WINDOW,
+                     "trend_utc_offset": DEFAULT_TREND_UTC_OFFSET},
+    Turbine: {"raw_prefixes": [], "trend_signals": []},
     # The empty host in it is replaced by Config.fill_missing() with the name made of
     # the location; validate() refuses a host that is still empty.
     Config: {"server": ServerConfig()},

@@ -1,0 +1,8 @@
+@echo off
+rem Local settings of build.bat. Copy this file to build.local.bat, which is not
+rem versioned, and fill in the password of the BVMS test database.
+set "ZABBIXVMS_TEST_DB_PASSWORD=<password of the BVMS test database>"
+rem Only when the test database is not localhost, user VMS, database BVMS:
+rem set "ZABBIXVMS_TEST_DB_HOST=localhost"
+rem set "ZABBIXVMS_TEST_DB_USER=VMS"
+rem set "ZABBIXVMS_TEST_DB_NAME=BVMS"

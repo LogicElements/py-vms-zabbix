@@ -127,6 +127,22 @@ zabbix_export:
         dependencies:
         - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
           expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
+    - uuid: 12761130c1f942b3816e9178aa765958
+      name: Stáří trendových dat
+      type: TRAP
+      key: vms.trend_age
+      value_type: UNSIGNED
+      description: Doba od posledního záznamu toho ze sledovaných signálů turbíny, který je na tom nejhůř
+        (UC8). Hodnoty nad jeden měsíc se hlásí jako jeden měsíc. Turbína bez sledovaných signálů ji neodesílá.
+      units: s
+      triggers:
+      - uuid: 60e75b3838164a378077b35e74c7de03
+        expression: last(/VMS zabbix agent/vms.trend_age)>5m
+        name: 'Chyba trendových dat: {ITEM.VALUE}'
+        priority: HIGH
+        dependencies:
+        - name: 'Turbína pod nominálními otáčkami: {ITEM.VALUE}'
+          expression: last(/VMS zabbix agent/vms.speed)<{$VMS.SPEED.NOMINAL}
     macros:
     - macro: '{$VMS.SPEED.NOMINAL}'
       value: '2500'
