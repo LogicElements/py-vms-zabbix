@@ -107,8 +107,8 @@ zabbix_export:
       value_type: UNSIGNED
       description: Největší počet tabulek surových dat se stejným prefixem přes prefixy turbíny
       triggers:
-      - uuid: 277a698c78f84841a4738313403b3af0
-        expression: last(/VMS zabbix agent/vms.raw_tables)>2
+      - uuid: c305a665c13b4a668e9dad0aa2962589
+        expression: last(/VMS zabbix agent/vms.raw_tables)>4
         name: 'Chyba exportu surových dat: {ITEM.VALUE}'
         priority: HIGH
     - uuid: e790bd5704644b8cbd0e5622ca9235d3

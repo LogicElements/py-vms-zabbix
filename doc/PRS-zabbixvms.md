@@ -40,7 +40,7 @@
 | UC5-R4 | Triggery turbín a value map stavu agenta v šablonách | Hotovo | tests/test_template.py, tests/test_triggers.py |
 | UC6-R1 | Seznam prefixů tabulek surových dat v konfiguraci turbíny | Hotovo | tests/test_config.py |
 | UC6-R2 | Tabulka patří k prefixu podle celého názvu `<prefix>_<datum>` | Hotovo | tests/test_collector.py, tests/test_collector_db.py |
-| UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 3 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
+| UC6-R3 | Počet tabulek jako největší počet přes prefixy, chyba exportu od 5 tabulek | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R4 | Stáří zápisu do nejnovější tabulky, chyba po 5 minutách mimo klid turbíny | Hotovo | tests/test_collector.py, tests/test_triggers.py |
 | UC6-R5 | Nová tabulka bez zápisu se první minutu nehlásí jako zastavený zápis | Hotovo | tests/test_collector.py |
 | UC7-R1 | Skupina `server` v konfiguraci: povinný host serveru a čtení z IPP | Hotovo | tests/test_config.py, tests/test_agent.py |
@@ -412,7 +412,7 @@ Sada triggerů, které šablona turbín obsahuje:
 | Chyba konfiguračního socketu: {ITEM.VALUE} | `vms.config_age` | `last({METRIC})>5m` | HIGH | – |
 | Chyba SW analýzy čtení bufferu: {ITEM.VALUE} | `vms.buf_rows` | `last({METRIC})>100000` | HIGH | – |
 | Chyba ukládání do bufferu: {ITEM.VALUE} | `vms.buf_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
-| Chyba exportu surových dat: {ITEM.VALUE} | `vms.raw_tables` | `last({METRIC})>2` | HIGH | – |
+| Chyba exportu surových dat: {ITEM.VALUE} | `vms.raw_tables` | `last({METRIC})>4` | HIGH | – |
 | Chyba zápisu surových dat: {ITEM.VALUE} | `vms.raw_write_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Chyba trendových dat: {ITEM.VALUE} | `vms.trend_age` | `last({METRIC})>5m` | HIGH | Turbína pod nominálními otáčkami: {ITEM.VALUE} |
 | Z hostu nepřišla žádná hodnota 5m | `vms.speed` | `nodata({METRIC},5m)=1` | HIGH | – |
@@ -495,7 +495,7 @@ turbíny nepozná výpadek TVMS.
 **DoD:**
 - Pro každý prefix turbíny se spočítají tabulky, které k němu patří; `vms.raw_tables` je největší z těchto počtů.
 - Prefix bez tabulek do počtu přispívá nulou.
-- Šablona obsahuje trigger, který hlásí chybu exportu, když má jeden prefix 3 a více tabulek.
+- Šablona obsahuje trigger, který hlásí chybu exportu, když má jeden prefix 5 a více tabulek.
 
 ### UC6-R4
 **Popis:** Stáří zápisu surových dat je stáří posledního zápisu do nejnovější tabulky u toho prefixu turbíny, který je na tom nejhůř.

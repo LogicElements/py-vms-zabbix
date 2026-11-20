@@ -199,11 +199,11 @@ TRIGGERS = (
         blocked_by=TURBINE_BELOW_NOMINAL,
     ),
     Trigger(
-        # One table is being written, a second one waits for its export for a moment
-        # after the switch; a third means an export did not happen.
+        # One table is being written and a few older ones may wait for their export
+        # for a while; a fifth means the exports have stopped.
         name="Chyba exportu surových dat: {ITEM.VALUE}",
         key="vms.raw_tables",
-        condition="last({METRIC})>2",
+        condition="last({METRIC})>4",
         priority="HIGH",
     ),
     Trigger(

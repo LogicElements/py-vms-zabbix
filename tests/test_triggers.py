@@ -136,11 +136,11 @@ def test_only_what_a_standing_turbine_stops_writing_waits_for_it():
                for trigger in TRIGGERS if trigger.blocked_by)
 
 
-def test_three_raw_data_tables_of_one_prefix_are_a_failed_export():
-    """UC6-R3: one table is written, a second waits for its export; three is too many."""
+def test_five_raw_data_tables_of_one_prefix_are_a_failed_export():
+    """UC6-R3: one table is written, up to three wait for their export; five is too many."""
     trigger = next(trigger for trigger in TRIGGERS if trigger.key == "vms.raw_tables")
 
-    assert trigger.condition == "last({METRIC})>2"
+    assert trigger.condition == "last({METRIC})>4"
     assert not trigger.blocked_by
 
 

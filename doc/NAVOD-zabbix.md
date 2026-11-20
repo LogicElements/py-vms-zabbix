@@ -2,7 +2,8 @@
 
 Návod k nasazení šablon agenta. Nejprve se naimportuje šablona, pak se založí hosté;
 kroky 1 a 3 se opakují pro každou turbínu z konfigurace. Host serveru, který nese stav
-agenta a nabití UPS, popisuje kapitola 7 a je potřeba na každé instalaci. Po aktualizaci
+agenta a nabití UPS, popisuje kapitola 7 a je potřeba na každé instalaci. Částečný
+monitoring Windows stroje bez agenta VMS popisuje kapitola 8. Po aktualizaci
 agenta na novou verzi stačí šablonu naimportovat znovu, nové položky a triggery se tím
 doplní ke stávajícím; položky a triggery, které nová verze zrušila, odstraní volba
 **Delete missing** v dialogu importu, viz kapitola 2.
@@ -163,7 +164,7 @@ projeví po restartu služby.
 
 Šablona k tomu hlásí dvě chyby:
 
-- *Chyba exportu surových dat*, když má jeden prefix v databázi 3 a více tabulek: vzniká nová
+- *Chyba exportu surových dat*, když má jeden prefix v databázi 5 a více tabulek: vzniká nová
   tabulka, ale ty staré se neexportují a nemažou.
 - *Chyba zápisu surových dat*, když se do nejnovější tabulky některého prefixu 5 minut nic
   nezapsalo. Za klidu turbíny mlčí, viz kapitola 4. Na první zápis do nově založené tabulky
@@ -304,3 +305,63 @@ v kapitole 4.
 Když agent nabití z IPP nezjistí, například protože IPP neběží, odmítne přihlášení nebo
 ztratil spojení s UPS, nabití v tom cyklu neposílá a hlásí chybu agenta. Co jednotlivé
 texty znamenají, popisuje [přehled chyb agenta](CHYBY-agenta.md).
+
+## 8. Částečný monitoring Windows stroje
+
+Windows stroj, na kterém neběží agent VMS (například pracovní stanice nebo další server
+instalace), se dá sledovat jen částečně: výkon, paměť, disky a síť, bez běžících služeb
+a dalších věcí, které na něm nikdo nehlídá. Použije se standardní šablona Zabbixu pro
+Windows a její upravená kopie. Šablony VMS se tu nepoužívají. Na stroji běží jen **Zabbix
+agent 2**, ten dodává data pro šablonu.
+
+### 8.1 Nainstalovat Zabbix agent 2 na stroj
+
+Na sledovaném stroji nainstalujte Zabbix agent 2 (MSI instalátor z webu Zabbixu) a v jeho
+konfiguraci `zabbix_agent2.conf` nastavte:
+
+- `ServerActive` na adresu Zabbix serveru (port 10051 je výchozí),
+- `Server` nechte prázdný: stroj je za NATem, server se k němu nedovolá, takže pasivní
+  kontroly se nepoužijí,
+- `Hostname` na přesné jméno hosta z kroku 8.3; musí se shodovat včetně velikosti písmen.
+
+Agent se sám připojuje k serveru, takže stačí povolit odchozí TCP port 10051 ze stroje
+na server; nic příchozího se neotevírá. Po změně konfigurace restartujte službu
+*Zabbix Agent 2*.
+
+### 8.2 Zkopírovat a zredukovat šablonu
+
+Kopie se dělá jednou, ne pro každý stroj.
+
+1. **Data collection → Templates**, najděte šablonu **Windows by Zabbix agent active**
+   (aktivní kontroly, jediná použitelná za NATem; pro agenta 2 platí stejně jako pro
+   klasického) a zvolte **Full clone**. Kopii pojmenujte například `VMS Windows partial`. Pozor, **Clone** bez
+   *Full* nekopíruje položky ani triggery.
+2. V kopii otevřete **Discovery rules** a odstraňte pravidlo **Windows services discovery**.
+   Spolu s ním zmizí prototypy položek i triggerů hlídající běžící služby.
+3. Stejným způsobem odstraňte další pravidla a položky, které se nesledují. Obvykle jde
+   o **Physical disks discovery** a **Network interface discovery**, pokud se nehlídá výkon
+   disků a síťový provoz. Ponechte jen to, co se skutečně vyhodnocuje: typicky CPU, paměť
+   a **Filesystems discovery**.
+4. V záložce **Items** a **Triggers** zkontrolujte, že nezbyl trigger závislý na smazané
+   položce; Zabbix takové smazání odmítne a vypíše, co je třeba odstranit nejdřív.
+5. V záložce **Macros** upravte meze, které se liší od výchozích (například
+   `{$MEMORY.UTIL.MAX}` nebo `{$CPU.UTIL.CRIT}`).
+
+Přesné názvy pravidel a maker se mezi verzemi Zabbixu mírně liší, proto se na ně řiďte podle
+zobrazeného seznamu **Discovery rules** a **Macros** v kopii.
+
+### 8.3 Založit host
+
+V **Data collection → Hosts → Create host** zadejte:
+
+- **Host name** přesně podle `Hostname` z 8.1,
+- **Templates** `VMS Windows partial` z 8.2,
+- **Interfaces**: nechte prázdné; aktivní kontroly interface nepotřebují (starší verze
+  Zabbixu ho mohou chtít, pak zadejte libovolnou adresu, nepoužije se),
+- **Host groups**: pro rozesílání mailů podle kapitoly 5 skupinu `VMS`, jinak vlastní skupinu,
+  například `VMS Windows`. Mail se posílá jen z problémů hostů ve skupině z podmínky akce.
+
+Za několik minut by na hostu měla naskočit data v **Monitoring → Latest data**. Ikona
+**ZBX** zůstane šedá, protože ji ovlivňují jen pasivní kontroly. Když data nejdou, nejčastěji
+je špatný `Hostname` nebo `ServerActive`, případně zablokovaný odchozí port 10051; příčinu
+ukáže log agenta (`zabbix_agent2.log`).

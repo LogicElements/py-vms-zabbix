@@ -52,7 +52,7 @@ Bez něj `build.bat` upozorní, že se databázové testy přeskakují.
 Verze balíčku je na jediném místě, v `src/zabbixvms/__init__.py`:
 
 ```python
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 ```
 
 `pyproject.toml` si ji odtud bere (`dynamic = ["version"]`), takže se obě čísla nemají jak
